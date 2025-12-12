@@ -87,6 +87,16 @@
         display: inline-block;
       }
 
+      .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+
+      .btn-xs {
+        padding: 3px 8px;
+        font-size: 11px;
+      }
+
       .btn-primary {
         background-color: #3498db;
         color: white;
@@ -269,6 +279,21 @@
 
       .badge-danger {
         background-color: #e74c3c;
+        color: white;
+      }
+
+      .badge-primary {
+        background-color: #3498db;
+        color: white;
+      }
+
+      .badge-warning {
+        background-color: #f39c12;
+        color: white;
+      }
+
+      .badge-secondary {
+        background-color: #95a5a6;
         color: white;
       }
 
@@ -1554,9 +1579,37 @@
         });
 
         let html = "";
+        
+        // 添加全局全选/取消按钮
+        html += `
+          <div style="margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-weight: bold;">批量操作</span>
+              <div>
+                <button type="button" class="btn btn-xs btn-primary" onclick="toggleAllPermissions(true)">全选所有</button>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="toggleAllPermissions(false)">取消所有</button>
+              </div>
+            </div>
+          </div>
+        `;
+        
         Object.keys(grouped).forEach((path) => {
+          const pathId = path.replace(/[^a-zA-Z0-9]/g, '_');
+          const allChecked = grouped[path].every(perm => 
+            selectedPermissions.some(p => 
+              (p.obj === perm.obj && p.act === perm.act) || p === perm.obj + ":" + perm.act
+            )
+          );
+          
           html += `<div style="margin-bottom: 15px;">
-            <h4 style="margin-bottom: 10px; color: #333;">${path}</h4>`;
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <h4 style="margin: 0; color: #333;">${path}</h4>
+              <div>
+                <button type="button" class="btn btn-xs btn-primary" onclick="togglePathPermissions('${pathId}', true)">全选</button>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="togglePathPermissions('${pathId}', false)">取消</button>
+              </div>
+            </div>
+            <div id="path_${pathId}">`;
 
           grouped[path].forEach((perm) => {
             const isChecked = selectedPermissions.some(
@@ -1568,7 +1621,7 @@
               <label style="display: block; margin: 5px 0; padding-left: 20px;">
                 <input type="checkbox" name="permissions" value="${perm.obj}:${
               perm.act
-            }" 
+            }" data-path="${pathId}"
                     ${isChecked ? "checked" : ""}>
                 <span class="badge badge-${getMethodBadgeClass(perm.act)}">${
               perm.act
@@ -1578,10 +1631,26 @@
             `;
           });
 
-          html += "</div>";
+          html += `</div></div>`;
         });
 
         document.getElementById("apiPermissions").innerHTML = html;
+      }
+
+      // 切换路径权限选择
+      function togglePathPermissions(pathId, selectAll) {
+        const checkboxes = document.querySelectorAll(`input[data-path="${pathId}"]`);
+        checkboxes.forEach(checkbox => {
+          checkbox.checked = selectAll;
+        });
+      }
+
+      // 切换所有权限选择
+      function toggleAllPermissions(selectAll) {
+        const checkboxes = document.querySelectorAll('input[name="permissions"]');
+        checkboxes.forEach(checkbox => {
+          checkbox.checked = selectAll;
+        });
       }
 
       // 获取HTTP方法的样式类
