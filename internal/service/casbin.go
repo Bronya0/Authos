@@ -1,0 +1,75 @@
+package service
+
+import (
+	"fmt"
+
+	"github.com/casbin/casbin/v2"
+	gormadapter "github.com/casbin/gorm-adapter/v3"
+	"gorm.io/gorm"
+)
+
+// CasbinService Casbin 服务
+type CasbinService struct {
+	Enforcer *casbin.Enforcer
+}
+
+// NewCasbinService 创建 Casbin 服务实例
+func NewCasbinService(db *gorm.DB) (*CasbinService, error) {
+	// 使用 Gorm Adapter 连接到 SQLite 数据库
+	adapter, err := gormadapter.NewAdapterByDB(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create casbin adapter: %w", err)
+	}
+
+	// 创建 Casbin 执行器
+	modelPath := "internal/middleware/model.conf"
+	enforcer, err := casbin.NewEnforcer(modelPath, adapter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create casbin enforcer: %w", err)
+	}
+
+	// 加载策略
+	if err := enforcer.LoadPolicy(); err != nil {
+		return nil, fmt.Errorf("failed to load casbin policy: %w", err)
+	}
+
+	return &CasbinService{
+		Enforcer: enforcer,
+	}, nil
+}
+
+// CheckPermission 检查权限
+type CheckPermissionReq struct {
+	UserID uint   `json:"userId" binding:"required"`
+	Obj    string `json:"obj" binding:"required"`
+	Act    string `json:"act" binding:"required"`
+}
+
+// CheckPermission 检查权限
+func (s *CasbinService) CheckPermission(userId uint, obj, act string) (bool, error) {
+	// 使用 keyMatch2 匹配器检查权限
+	return s.Enforcer.Enforce(fmt.Sprintf("user:%d", userId), obj, act)
+}
+
+// LoadPolicy 重新加载策略
+func (s *CasbinService) LoadPolicy() error {
+	return s.Enforcer.LoadPolicy()
+}
+
+// AddPolicy 添加策略
+func (s *CasbinService) AddPolicy(sub, obj, act string) error {
+	_, err := s.Enforcer.AddPolicy(sub, obj, act)
+	return err
+}
+
+// RemovePolicy 删除策略
+func (s *CasbinService) RemovePolicy(sub, obj, act string) error {
+	_, err := s.Enforcer.RemovePolicy(sub, obj, act)
+	return err
+}
+
+// RemoveFilteredPolicy 根据过滤条件删除策略
+func (s *CasbinService) RemoveFilteredPolicy(fieldIndex int, fieldValues ...string) error {
+	_, err := s.Enforcer.RemoveFilteredPolicy(fieldIndex, fieldValues...)
+	return err
+}
