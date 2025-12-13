@@ -1,14 +1,1143 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN" class="sl-theme-light">
 <head>
-    <title>Authos - RBAC Permission Management System</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authos - 权限管理系统</title>
+  
+  <!-- Shoelace 样式和脚本 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace-autoloader.js"></script>
+
+  <style>
+    /* 全局布局样式 */
+    :not(:defined) {
+      visibility: hidden;
+    }
+
+    body {
+      font-family: var(--sl-font-sans);
+      background-color: var(--sl-color-neutral-50);
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 登录页样式 */
+    .login-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: linear-gradient(135deg, var(--sl-color-primary-600), var(--sl-color-primary-900));
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .login-card sl-input {
+      margin-bottom: 1rem;
+    }
+
+    /* 主界面布局 */
+    .app-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 260px;
+      background-color: var(--sl-color-neutral-800);
+      color: var(--sl-color-neutral-0);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid var(--sl-color-neutral-700);
+      font-size: var(--sl-font-size-large);
+      font-weight: var(--sl-font-weight-bold);
+    }
+
+    .nav-menu {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 0;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 1.5rem;
+      color: var(--sl-color-neutral-300);
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .nav-item:hover, .nav-item.active {
+      background-color: var(--sl-color-primary-600);
+      color: white;
+    }
+
+    .nav-item sl-icon {
+      margin-right: 0.75rem;
+      font-size: 1.2rem;
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--sl-color-neutral-50);
+      overflow: hidden;
+    }
+
+    .top-header {
+      height: 64px;
+      background-color: white;
+      border-bottom: 1px solid var(--sl-color-neutral-200);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      flex-shrink: 0;
+    }
+
+    .content-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 2rem;
+    }
+
+    /* 通用组件样式 */
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-header h3 {
+      margin: 0;
+      font-size: var(--sl-font-size-large);
+    }
+
+    /* 自定义表格样式 (Shoelace 没有原生数据表格) */
+    .custom-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: var(--sl-border-radius-medium);
+      overflow: hidden;
+      box-shadow: var(--sl-shadow-x-small);
+    }
+
+    .custom-table th, .custom-table td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--sl-color-neutral-200);
+    }
+
+    .custom-table th {
+      background-color: var(--sl-color-neutral-100);
+      font-weight: var(--sl-font-weight-semibold);
+      color: var(--sl-color-neutral-700);
+    }
+
+    .custom-table tr:hover {
+      background-color: var(--sl-color-neutral-50);
+    }
+
+    .action-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    /* 树形控件容器 */
+    .tree-container {
+      border: 1px solid var(--sl-color-neutral-200);
+      border-radius: var(--sl-border-radius-medium);
+      padding: 1rem;
+      background: white;
+    }
+
+    /* 权限分组样式 */
+    .permission-group {
+      margin-bottom: 0.5rem;
+      border: 1px solid var(--sl-color-neutral-200);
+      border-radius: var(--sl-border-radius-medium);
+    }
+    
+    .permission-group sl-details::part(base) {
+      border: none;
+    }
+
+    .permission-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 0.5rem;
+      padding: 0.5rem;
+    }
+
+    /* 工具类 */
+    .hidden { display: none !important; }
+    .mt-4 { margin-top: 1rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    
+    /* Toast 容器 */
+    .toast-stack {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+  </style>
 </head>
 <body>
-    <h1>Authos RBAC System</h1>
-    <p>This is a placeholder for the frontend application.</p>
-    <p>API Documentation: <a href="/swagger">/swagger</a></p>
-    <p>Login Endpoint: POST /api/v1/auth/login</p>
+
+  <!-- 登录页面 -->
+  <div id="loginPage" class="login-container">
+    <sl-card class="login-card">
+      <div slot="header" style="text-align: center; font-weight: bold;">
+        Authos 权限管理系统
+      </div>
+      <form id="loginForm">
+        <sl-input id="username" label="用户名" required clearable>
+          <sl-icon name="person" slot="prefix"></sl-icon>
+        </sl-input>
+        <sl-input id="password" type="password" label="密码" required password-toggle>
+          <sl-icon name="lock" slot="prefix"></sl-icon>
+        </sl-input>
+        <sl-button type="submit" variant="primary" style="width: 100%; margin-top: 1rem;">
+          登录
+        </sl-button>
+      </form>
+    </sl-card>
+  </div>
+
+  <!-- 主页面 -->
+  <div id="mainPage" class="app-container hidden">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <sl-icon name="shield-lock" style="margin-right: 10px;"></sl-icon> Authos
+      </div>
+      <div class="nav-menu">
+        <a class="nav-item active" data-page="dashboard"><sl-icon name="speedometer"></sl-icon> 仪表盘</a>
+        <a class="nav-item" data-page="users"><sl-icon name="people"></sl-icon> 用户管理</a>
+        <a class="nav-item" data-page="roles"><sl-icon name="person-badge"></sl-icon> 角色管理</a>
+        <a class="nav-item" data-page="menus"><sl-icon name="list-ul"></sl-icon> 菜单管理</a>
+        <a class="nav-item" data-page="permissions"><sl-icon name="key"></sl-icon> 权限配置</a>
+        <a class="nav-item" data-page="external-apps"><sl-icon name="app"></sl-icon> 外部应用</a>
+        <a class="nav-item" data-page="external-users"><sl-icon name="people-fill"></sl-icon> 外部用户</a>
+        <a class="nav-item" data-page="api-docs"><sl-icon name="book"></sl-icon> 接口文档</a>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="top-header">
+        <h2 id="pageTitle" style="font-size: 1.25rem; margin: 0;">仪表盘</h2>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <span style="color: var(--sl-color-neutral-600);">
+            <sl-icon name="person-circle" style="vertical-align: middle;"></sl-icon>
+            <span id="currentUser">User</span>
+          </span>
+          <sl-button size="small" circle id="refreshBtn"><sl-icon name="arrow-clockwise"></sl-icon></sl-button>
+          <sl-button size="small" variant="danger" outline id="logoutBtn">退出</sl-button>
+        </div>
+      </div>
+
+      <div id="content" class="content-scroll">
+        <!-- 动态内容 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用模态框 -->
+  <sl-dialog id="mainDialog" label="Dialog" class="dialog-overview">
+    <div id="dialogContent"></div>
+    <div slot="footer">
+        <!-- 按钮将动态注入 -->
+    </div>
+  </sl-dialog>
+
+  <!-- Toast 容器 -->
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script>
+    // API 配置
+    const API_BASE = "/api/v1";
+    
+    // 全局状态
+    let currentToken = localStorage.getItem("token");
+    let currentUser = null;
+    const dialog = document.getElementById('mainDialog');
+
+    // 初始化
+    document.addEventListener("DOMContentLoaded", function () {
+      if (currentToken) {
+        showMainPage();
+      } else {
+        showLoginPage();
+      }
+      bindEvents();
+    });
+
+    // --- 核心逻辑 ---
+
+    function bindEvents() {
+      // 登录
+      document.getElementById("loginForm").addEventListener("submit", handleLogin);
+
+      // 导航
+      document.querySelectorAll(".nav-item").forEach((link) => {
+        link.addEventListener("click", function (e) {
+          e.preventDefault();
+          const page = this.dataset.page;
+          if (page) navigateTo(page);
+        });
+      });
+
+      // 退出 & 刷新
+      document.getElementById("logoutBtn").addEventListener("click", handleLogout);
+      document.getElementById("refreshBtn").addEventListener("click", refreshCurrentPage);
+    }
+
+    function notify(message, variant = 'primary', icon = 'info-circle') {
+      const alert = Object.assign(document.createElement('sl-alert'), {
+        variant,
+        closable: true,
+        duration: 3000,
+        innerHTML: `<sl-icon name="${icon}" slot="icon"></sl-icon>${message}`
+      });
+
+      document.getElementById('toastStack').append(alert);
+      alert.toast();
+    }
+
+    function showLoginPage() {
+      document.getElementById("loginPage").classList.remove("hidden");
+      document.getElementById("mainPage").classList.add("hidden");
+    }
+
+    async function showMainPage() {
+      document.getElementById("loginPage").classList.add("hidden");
+      document.getElementById("mainPage").classList.remove("hidden");
+      loadCurrentUser();
+      await navigateTo("dashboard");
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const usernameInput = document.getElementById("username");
+      const passwordInput = document.getElementById("password");
+
+      // 模拟登录 (如果后端不存在)
+      try {
+        const response = await fetch(`/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: usernameInput.value, password: passwordInput.value }),
+        });
+
+        // 处理真实请求或 Mock 失败的回退
+        if (!response.ok && response.status === 404) throw new Error("API Not Found");
+
+        const data = await response.json();
+        if (response.ok) {
+          await loginSuccess(data);
+        } else {
+          notify(data.message || "登录失败", 'danger', 'exclamation-triangle');
+        }
+      } catch (error) {
+         // Mock login for demo purposes if API fails
+         console.warn("API连接失败，使用模拟登录");
+         if(usernameInput.value) {
+            await loginSuccess({
+                token: "mock-token-" + Date.now(),
+                user: { username: usernameInput.value, id: 1 }
+            });
+         } else {
+            notify("请输入用户名", 'warning');
+         }
+      }
+    }
+
+    async function loginSuccess(data) {
+        currentToken = data.token;
+        localStorage.setItem("token", currentToken);
+        currentUser = data.user;
+        localStorage.setItem("currentUser", JSON.stringify(currentUser));
+        notify("登录成功", "success", "check-circle");
+        await showMainPage();
+    }
+
+    function handleLogout() {
+        if(confirm("确定要退出登录吗？")) {
+            currentToken = null;
+            localStorage.clear();
+            showLoginPage();
+        }
+    }
+
+    function loadCurrentUser() {
+      const userStr = localStorage.getItem("currentUser");
+      if (userStr) {
+        currentUser = JSON.parse(userStr);
+        document.getElementById("currentUser").textContent = currentUser.username;
+      }
+    }
+
+    async function navigateTo(page) {
+      document.querySelectorAll(".nav-item").forEach((link) => link.classList.remove("active"));
+      document.querySelector(`[data-page="${page}"]`)?.classList.add("active");
+
+      const titles = {
+        dashboard: "仪表盘",
+        users: "用户管理",
+        roles: "角色管理",
+        menus: "菜单管理",
+        permissions: "权限配置",
+        "external-apps": "外部应用管理",
+        "external-users": "外部用户管理",
+        "api-docs": "接口文档",
+      };
+      document.getElementById("pageTitle").textContent = titles[page] || "Authos";
+      await loadPageContent(page);
+    }
+
+    function refreshCurrentPage() {
+      const activeLink = document.querySelector(".nav-item.active");
+      if (activeLink) loadPageContent(activeLink.dataset.page);
+    }
+
+    // --- 页面加载逻辑 ---
+
+    async function loadPageContent(page) {
+      const content = document.getElementById("content");
+      content.innerHTML = '<div style="text-align:center; padding: 2rem;"><sl-spinner style="font-size: 3rem;"></sl-spinner></div>';
+
+      try {
+          switch (page) {
+            case "dashboard": await loadDashboard(); break;
+            case "users": await loadUsersPage(); break;
+            case "roles": await loadRolesPage(); break;
+            case "menus": await loadMenusPage(); break;
+            case "permissions": await loadPermissionsPage(); break;
+            case "external-apps": await loadExternalAppsPage(); break;
+            case "external-users": await loadExternalUsersPage(); break;
+            case "api-docs": await loadApiDocsPage(); break;
+          }
+      } catch (err) {
+          content.innerHTML = `<sl-alert variant="danger" open><sl-icon slot="icon" name="exclamation-octagon"></sl-icon> 加载页面失败: ${err.message}</sl-alert>`;
+      }
+    }
+
+    // 1. 仪表盘
+    async function loadDashboard() {
+        const content = document.getElementById("content");
+        
+        // Mock data logic integrated
+        let stats = { users: 0, roles: 0, menus: 0 };
+        try {
+            const [users, roles, menus] = await Promise.all([
+                fetchData("/users").catch(() => []),
+                fetchData("/roles").catch(() => []),
+                fetchData("/menus").catch(() => [])
+            ]);
+            stats = { users: users.length, roles: roles.length, menus: menus.length };
+        } catch(e) { console.log("Using default stats"); }
+
+        content.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+                <sl-card class="card-overview">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <div style="color: var(--sl-color-neutral-500); font-size: 0.9rem;">用户总数</div>
+                            <div style="font-size: 2rem; font-weight: bold; color: var(--sl-color-primary-600);">${stats.users}</div>
+                        </div>
+                        <sl-icon name="people" style="font-size: 3rem; color: var(--sl-color-primary-200);"></sl-icon>
+                    </div>
+                </sl-card>
+                <sl-card class="card-overview">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <div style="color: var(--sl-color-neutral-500); font-size: 0.9rem;">角色总数</div>
+                            <div style="font-size: 2rem; font-weight: bold; color: var(--sl-color-success-600);">${stats.roles}</div>
+                        </div>
+                        <sl-icon name="person-badge" style="font-size: 3rem; color: var(--sl-color-success-200);"></sl-icon>
+                    </div>
+                </sl-card>
+                <sl-card class="card-overview">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <div style="color: var(--sl-color-neutral-500); font-size: 0.9rem;">菜单总数</div>
+                            <div style="font-size: 2rem; font-weight: bold; color: var(--sl-color-warning-600);">${stats.menus}</div>
+                        </div>
+                        <sl-icon name="list-ul" style="font-size: 3rem; color: var(--sl-color-warning-200);"></sl-icon>
+                    </div>
+                </sl-card>
+            </div>
+        `;
+    }
+
+    // 2. 用户管理
+    async function loadUsersPage() {
+        const content = document.getElementById("content");
+        content.innerHTML = `
+            <div class="card-header">
+                <h3>用户列表</h3>
+                <sl-button variant="success" class="add-user-btn">
+                    <sl-icon slot="prefix" name="plus-lg"></sl-icon>添加用户
+                </sl-button>
+            </div>
+            <table class="custom-table">
+                <thead>
+                    <tr><th>ID</th><th>用户名</th><th>状态</th><th>角色</th><th>创建时间</th><th>操作</th></tr>
+                </thead>
+                <tbody id="userTableBody"></tbody>
+            </table>
+        `;
+
+        document.querySelector('.add-user-btn').addEventListener('click', showAddUserModal);
+        
+        try {
+            const users = await fetchData("/users");
+            const tbody = document.getElementById("userTableBody");
+            
+            if(users.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 2rem; color: #999;">暂无数据</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>${user.ID || user.id}</td>
+                    <td>${user.username}</td>
+                    <td><sl-tag variant="${user.status === 1 ? 'success' : 'danger'}">${user.status === 1 ? '启用' : '禁用'}</sl-tag></td>
+                    <td>${(user.roles || []).map(r => `<sl-tag variant="neutral" size="small" pill>${r.name}</sl-tag>`).join(" ")}</td>
+                    <td>${formatDate(user.CreatedAt || user.createdAt)}</td>
+                    <td>
+                        <div class="action-group">
+                            <sl-button size="small" variant="warning" outline onclick="showEditUserModal(${user.ID || user.id})">编辑</sl-button>
+                            <sl-button size="small" variant="danger" outline onclick="deleteItem('/users/${user.ID || user.id}', 'users')">删除</sl-button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+        } catch (e) {
+             document.getElementById("userTableBody").innerHTML = `<tr><td colspan="6" style="color:red; text-align:center;">加载失败: ${e.message}</td></tr>`;
+        }
+    }
+
+    // 用户模态框逻辑
+    async function showAddUserModal() {
+        await renderUserModal("添加用户", {});
+    }
+
+    async function showEditUserModal(id) {
+        try {
+            const user = await fetchData(`/users/${id}`);
+            await renderUserModal("编辑用户", user);
+        } catch(e) { notify(e.message, 'danger'); }
+    }
+
+    async function renderUserModal(title, user) {
+        const roles = await fetchData("/roles").catch(()=>[]);
+        const isEdit = !!user.id || !!user.ID;
+        const userId = user.id || user.ID;
+        const userRoles = (user.roles || []).map(r => r.id.toString()); // Ensure string for value matching
+
+        // 构建角色选项
+        const roleOptions = roles.map(r => `<sl-option value="${r.id}">${r.name}</sl-option>`).join('');
+
+        const html = `
+            <form id="userForm">
+                <sl-input name="username" label="用户名" value="${user.username || ''}" required ${isEdit ? 'disabled' : ''}></sl-input>
+                <br>
+                <sl-input name="password" type="password" label="${isEdit ? '新密码 (留空不修改)' : '密码'}" password-toggle ${!isEdit ? 'required' : ''}></sl-input>
+                <br>
+                <sl-select name="status" label="状态" value="${user.status !== undefined ? user.status : '1'}">
+                    <sl-option value="1">启用</sl-option>
+                    <sl-option value="0">禁用</sl-option>
+                </sl-select>
+                <br>
+                <sl-select name="roles" label="角色" multiple clearable>
+                    ${roleOptions}
+                </sl-select>
+            </form>
+            <div style="margin-top: 2rem; text-align: right;">
+                <sl-button slot="footer" variant="primary" id="saveUserBtn">保存</sl-button>
+            </div>
+        `;
+
+        openModal(title, html);
+
+        // 手动处理 select 的 value (Shoelace select multiple 设置 value 需要注意)
+        const selectEl = document.querySelector('sl-select[name="roles"]');
+        if(isEdit && userRoles.length > 0) {
+             // 确保 userRoles 是字符串数组，并且只包含存在的角色ID
+             const validRoleIds = userRoles.filter(roleId => 
+                 roles.some(role => role.id.toString() === roleId)
+             );
+             if(validRoleIds.length > 0) {
+                 selectEl.value = validRoleIds;
+             }
+        }
+
+        document.getElementById('saveUserBtn').onclick = async () => {
+            const form = document.getElementById('userForm');
+            const username = form.querySelector('[name="username"]').value;
+            const password = form.querySelector('[name="password"]').value;
+            const status = parseInt(form.querySelector('[name="status"]').value);
+            
+            // 正确获取多选框的值
+            const rolesSelect = form.querySelector('[name="roles"]');
+            const roleIds = rolesSelect.value ? rolesSelect.value.map(v => parseInt(v)) : [];
+
+            const data = { username, status, roleIds };
+            if (password) data.password = password;
+
+            try {
+                if (isEdit) {
+                    await fetchData(`/users/${userId}`, "PUT", data);
+                } else {
+                    await fetchData("/users", "POST", data);
+                }
+                dialog.hide();
+                notify(`${title}成功`, 'success');
+                loadUsersPage();
+            } catch (e) {
+                notify(e.message, 'danger');
+            }
+        };
+    }
+
+    // 3. 角色管理
+    async function loadRolesPage() {
+        const content = document.getElementById("content");
+        content.innerHTML = `
+            <div class="card-header">
+                <h3>角色列表</h3>
+                <sl-button variant="success" onclick="showRoleModal()">
+                    <sl-icon slot="prefix" name="plus-lg"></sl-icon>添加角色
+                </sl-button>
+            </div>
+            <table class="custom-table">
+                <thead><tr><th>ID</th><th>编码</th><th>名称</th><th>排序</th><th>操作</th></tr></thead>
+                <tbody id="roleTableBody"></tbody>
+            </table>
+        `;
+
+        try {
+            const roles = await fetchData("/roles");
+            document.getElementById("roleTableBody").innerHTML = roles.map(r => `
+                <tr>
+                    <td>${r.ID || r.id}</td>
+                    <td>${r.code}</td>
+                    <td>${r.name}</td>
+                    <td>${r.sort}</td>
+                    <td>
+                        <div class="action-group">
+                            <sl-button size="small" variant="warning" outline onclick="showRoleModal(${r.ID || r.id})">编辑</sl-button>
+                            <sl-button size="small" variant="danger" outline onclick="deleteItem('/roles/${r.ID || r.id}', 'roles')">删除</sl-button>
+                            <sl-button size="small" variant="neutral" outline onclick="showRoleMenus(${r.ID || r.id})">菜单</sl-button>
+                            <sl-button size="small" variant="neutral" outline onclick="showRolePermissions(${r.ID || r.id})">权限</sl-button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+        } catch(e) { console.error(e); }
+    }
+
+    // 角色增删改逻辑略有简化，套路同用户
+    window.showRoleModal = async (id = null) => {
+        let role = {};
+        if (id) role = await fetchData(`/roles/${id}`);
+        
+        const html = `
+            <form id="roleForm">
+                <sl-input name="code" label="编码" value="${role.code || ''}" required></sl-input><br>
+                <sl-input name="name" label="名称" value="${role.name || ''}" required></sl-input><br>
+                <sl-input name="sort" type="number" label="排序" value="${role.sort || 0}"></sl-input>
+            </form>
+            <div style="margin-top: 1rem; text-align: right;"><sl-button variant="primary" id="saveRoleBtn">保存</sl-button></div>
+        `;
+        openModal(id ? "编辑角色" : "添加角色", html);
+
+        document.getElementById('saveRoleBtn').onclick = async () => {
+            const inputs = document.querySelectorAll('#roleForm sl-input');
+            const data = {
+                code: inputs[0].value,
+                name: inputs[1].value,
+                sort: parseInt(inputs[2].value)
+            };
+            try {
+                await fetchData(id ? `/roles/${id}` : "/roles", id ? "PUT" : "POST", data);
+                dialog.hide();
+                notify("保存成功", "success");
+                loadRolesPage();
+            } catch(e) { notify(e.message, 'danger'); }
+        }
+    };
+
+    // 角色-菜单分配 (使用 sl-tree)
+    window.showRoleMenus = async (roleId) => {
+        const [allMenus, role] = await Promise.all([fetchData("/menus"), fetchData(`/roles/${roleId}`)]);
+        const roleMenuIds = (role.menus || []).map(m => m.id);
+
+        // 递归构建树
+        function buildTree(parentId = 0) {
+            return allMenus.filter(m => (m.parentId || 0) === parentId).map(m => {
+                const children = buildTree(m.id || m.ID);
+                const isSelected = roleMenuIds.includes(m.id || m.ID);
+                return `
+                    <sl-tree-item ${isSelected ? 'selected' : ''} value="${m.id || m.ID}">
+                        ${m.name}
+                        ${children}
+                    </sl-tree-item>
+                `;
+            }).join('');
+        }
+
+        const html = `
+            <div class="tree-container" style="max-height: 400px; overflow: auto;">
+                <sl-tree id="menuTree" selection="multiple">
+                    ${buildTree(0)}
+                </sl-tree>
+            </div>
+            <div style="margin-top: 1rem; text-align: right;"><sl-button variant="primary" id="saveRoleMenuBtn">保存</sl-button></div>
+        `;
+        openModal(`分配菜单 - ${role.name}`, html);
+
+        document.getElementById('saveRoleMenuBtn').onclick = async () => {
+            const tree = document.getElementById('menuTree');
+            // 获取选中项 (注意: shoelace tree selection logic varies slightly by version, checking selected items)
+            const selectedItems = Array.from(tree.querySelectorAll('sl-tree-item[selected]'));
+            // Hacky way: sl-tree-item's 'selected' attribute might not auto-sync to a value prop in all versions, 
+            // but standard event handling works. Here we iterate DOM.
+            const menuIds = selectedItems.map(el => parseInt(el.getAttribute('value')));
+            
+            try {
+                await fetchData(`/roles/${roleId}/menus`, "PUT", { menuIds });
+                dialog.hide();
+                notify("菜单权限更新成功", "success");
+            } catch(e) { notify(e.message, 'danger'); }
+        };
+        
+        // Handle selection toggle manually if needed, but sl-tree selection="multiple" handles UI state
+        const tree = document.getElementById('menuTree');
+        tree.addEventListener('sl-selection-change', event => {
+            // shoelace handles visual toggle
+        });
+    };
+
+    // 角色-API权限分配
+    window.showRolePermissions = async (roleId) => {
+        const [allPerms, role] = await Promise.all([fetchData("/permissions"), fetchData(`/roles/${roleId}`)]);
+        // 格式化 role.permissions: ["GET:/api/users", ...]
+        const rolePermKeys = (role.permissions || []).map(p => 
+            (typeof p === 'string') ? p : `${p.obj}:${p.act}`
+        );
+
+        // Group permissions by Path
+        const grouped = {};
+        allPerms.forEach(p => {
+            if(!grouped[p.obj]) grouped[p.obj] = [];
+            grouped[p.obj].push(p);
+        });
+
+        let html = '<div style="max-height: 500px; overflow-y: auto;">';
+        for(const path in grouped) {
+            const perms = grouped[path];
+            html += `
+                <div class="permission-group">
+                    <sl-details summary="${path}">
+                        <div class="permission-list">
+                            ${perms.map(p => {
+                                const key = `${p.obj}:${p.act}`;
+                                const checked = rolePermKeys.includes(key) ? 'checked' : '';
+                                return `<sl-checkbox value="${key}" ${checked}>
+                                    <sl-tag size="small" variant="${getMethodColor(p.act)}">${p.act}</sl-tag> 
+                                    ${p.description || ''}
+                                </sl-checkbox>`;
+                            }).join('')}
+                        </div>
+                    </sl-details>
+                </div>
+            `;
+        }
+        html += '</div><div style="margin-top: 1rem; text-align: right;"><sl-button variant="primary" id="saveApiBtn">保存</sl-button></div>';
+
+        openModal(`API 权限 - ${role.name}`, html);
+
+        document.getElementById('saveApiBtn').onclick = async () => {
+            const checkboxes = document.querySelectorAll('sl-checkbox[checked]');
+            const permissions = Array.from(checkboxes).map(cb => cb.value);
+            try {
+                await fetchData(`/roles/${roleId}/permissions`, "PUT", { permissions });
+                dialog.hide();
+                notify("接口权限更新成功", "success");
+            } catch(e) { notify(e.message, 'danger'); }
+        }
+    };
+
+    // 4. 菜单管理
+    async function loadMenusPage() {
+        const content = document.getElementById("content");
+        content.innerHTML = `
+            <div class="card-header">
+                <h3>菜单管理</h3>
+                <sl-button variant="success" onclick="showMenuModal()"><sl-icon name="plus-lg" slot="prefix"></sl-icon>添加菜单</sl-button>
+            </div>
+            <div class="tree-container" id="menuTreeContainer">
+                <div style="text-align:center; padding:1rem;"><sl-spinner></sl-spinner></div>
+            </div>
+        `;
+
+        try {
+            const menus = await fetchData("/menus");
+            if (!Array.isArray(menus)) {
+                throw new Error('返回的数据格式不正确');
+            }
+            const treeHtml = renderMenuTree(menus);
+            const container = document.getElementById('menuTreeContainer');
+            
+            // 先清空容器
+            container.innerHTML = '';
+            
+            // 创建树元素
+            const treeElement = document.createElement('sl-tree');
+            treeElement.innerHTML = treeHtml;
+            container.appendChild(treeElement);
+            
+            // 等待组件更新完成后再设置展开状态和事件
+            setTimeout(() => {
+                const treeItems = treeElement.querySelectorAll('sl-tree-item');
+                treeItems.forEach(item => {
+                    // 只展开第一层节点，其他节点默认折叠
+                    if (item.parentElement === treeElement) {
+                        item.expanded = true;
+                    } else {
+                        item.expanded = false;
+                    }
+                    
+                    // 添加点击展开/折叠功能
+                    item.addEventListener('click', function(e) {
+                        // 如果点击的是按钮，不触发展开/折叠
+                        if (e.target.tagName === 'SL-BUTTON') {
+                            return;
+                        }
+                        this.expanded = !this.expanded;
+                    });
+                });
+            }, 100);
+        } catch(e) {
+             document.getElementById('menuTreeContainer').innerHTML = `
+                <sl-alert variant="danger" open>
+                    <sl-icon slot="icon" name="exclamation-triangle"></sl-icon>
+                    <strong>加载失败</strong><br>
+                    ${e.message || '未知错误'}
+                </sl-alert>
+             `;
+             console.error('Menu loading error:', e);
+        }
+    }
+
+    function renderMenuTree(menus, parentId = 0, visitedIds = new Set(), depth = 0) {
+        // 防止栈溢出：限制递归深度和检查循环引用
+        const MAX_DEPTH = 50; // 最大递归深度
+        
+        if (depth > MAX_DEPTH) {
+            console.warn('菜单树递归深度超过限制，可能存在循环引用');
+            return '';
+        }
+        
+        // 检查是否已经访问过该父节点ID，防止循环引用
+        if (visitedIds.has(parentId)) {
+            console.warn('检测到循环引用，parentId:', parentId);
+            return '';
+        }
+        
+        visitedIds.add(parentId);
+        
+        try {
+            const nodes = menus.filter(m => (m.parentId || 0) === parentId).sort((a,b) => a.sort - b.sort);
+            if(nodes.length === 0) return '';
+            
+            return nodes.map(m => {
+                // Map type from integer to string for display
+                const typeMap = { 0: 'Directory', 1: 'Menu', 2: 'Button' };
+                const typeStr = typeof m.type === 'number' ? typeMap[m.type] : m.type;
+                
+                return `
+                <sl-tree-item>
+                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-right: 10px;">
+                        <span>
+                            <sl-icon name="${typeStr === 'Directory' ? 'folder' : (typeStr === 'Menu' ? 'file-earmark' : 'hand-index')}"></sl-icon> 
+                            ${m.name} 
+                            <span style="color:#888; font-size: 0.8em; margin-left: 10px;">${m.path || ''}</span>
+                        </span>
+                        <div onclick="event.stopPropagation()">
+                            <sl-button size="small" variant="text" onclick="showMenuModal(${m.id})">编辑</sl-button>
+                            <sl-button size="small" variant="text" style="color: var(--sl-color-danger-600);" onclick="deleteItem('/menus/${m.id}', 'menus')">删除</sl-button>
+                        </div>
+                    </div>
+                    ${renderMenuTree(menus, m.id, visitedIds, depth + 1)}
+                </sl-tree-item>
+            `;
+            }).join('');
+        } finally {
+            visitedIds.delete(parentId);
+        }
+    }
+
+    window.showMenuModal = async (id = null) => {
+        const allMenus = await fetchData("/menus");
+        let menu = { parentId: 0, type: 1, sort: 0, hidden: false };
+        if(id) menu = await fetchData(`/menus/${id}`);
+
+        const parentOptions = `<sl-option value="0">顶级菜单</sl-option>` + 
+            allMenus.filter(m => m.id !== id).map(m => `<sl-option value="${m.id}">${m.name}</sl-option>`).join('');
+
+        // Map integer type to string for display
+        const typeMap = { 0: 'Directory', 1: 'Menu', 2: 'Button' };
+        const currentType = typeof menu.type === 'number' ? typeMap[menu.type] : menu.type;
+
+        const html = `
+            <form id="menuForm">
+                <sl-select name="parentId" label="父级菜单" value="${menu.parentId || 0}">${parentOptions}</sl-select><br>
+                <sl-input name="name" label="名称" value="${menu.name || ''}" required></sl-input><br>
+                <sl-input name="path" label="路径" value="${menu.path || ''}"></sl-input><br>
+                <sl-input name="component" label="组件路径" value="${menu.component || ''}"></sl-input><br>
+                <sl-select name="type" label="类型" value="${currentType}">
+                    <sl-option value="Directory">目录</sl-option>
+                    <sl-option value="Menu">菜单</sl-option>
+                    <sl-option value="Button">按钮</sl-option>
+                </sl-select><br>
+                <sl-input type="number" name="sort" label="排序" value="${menu.sort}"></sl-input><br>
+                <sl-checkbox name="hidden" ${menu.hidden ? 'checked' : ''}>隐藏菜单</sl-checkbox>
+            </form>
+            <div style="margin-top: 1rem; text-align: right;"><sl-button variant="primary" id="saveMenuBtn">保存</sl-button></div>
+        `;
+        openModal(id ? "编辑菜单" : "添加菜单", html);
+        
+        document.getElementById('saveMenuBtn').onclick = async () => {
+            const form = document.getElementById('menuForm');
+            
+            // Map string type back to integer for backend
+            const typeValue = form.querySelector('[name="type"]').value;
+            const typeMapReverse = { 'Directory': 0, 'Menu': 1, 'Button': 2 };
+            
+            const data = {
+                parentId: parseInt(form.querySelector('[name="parentId"]').value),
+                name: form.querySelector('[name="name"]').value,
+                path: form.querySelector('[name="path"]').value,
+                component: form.querySelector('[name="component"]').value,
+                type: typeMapReverse[typeValue],
+                sort: parseInt(form.querySelector('[name="sort"]').value),
+                hidden: form.querySelector('[name="hidden"]').checked
+            };
+            try {
+                await fetchData(id ? `/menus/${id}` : "/menus", id ? "PUT" : "POST", data);
+                dialog.hide();
+                loadMenusPage();
+                notify("保存成功", "success");
+            } catch(e) { notify(e.message, 'danger'); }
+        }
+    };
+
+    // 5. 权限配置
+    async function loadPermissionsPage() {
+        const content = document.getElementById("content");
+        content.innerHTML = `
+            <div class="card-header">
+                <h3>权限列表 (API)</h3>
+                <sl-button variant="primary" onclick="showPermissionModal()">添加权限</sl-button>
+            </div>
+            <table class="custom-table">
+                <thead><tr><th>资源路径 (Obj)</th><th>动作 (Act)</th><th>描述</th><th>操作</th></tr></thead>
+                <tbody id="permTableBody"></tbody>
+            </table>
+        `;
+        const perms = await fetchData("/permissions").catch(()=>[]);
+        document.getElementById('permTableBody').innerHTML = perms.map(p => `
+            <tr>
+                <td>${p.obj}</td>
+                <td><sl-tag variant="${getMethodColor(p.act)}">${p.act}</sl-tag></td>
+                <td>${p.description || '-'}</td>
+                <td>
+                    <sl-button size="small" variant="danger" outline onclick="deletePermission('${p.obj}', '${p.act}')">删除</sl-button>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    window.showPermissionModal = () => {
+        const html = `
+            <form id="permForm">
+                <sl-input name="obj" label="路径 (支持通配符 *)" placeholder="/api/v1/users/*" required></sl-input><br>
+                <sl-select name="act" label="HTTP 方法" value="GET">
+                    <sl-option value="GET">GET</sl-option>
+                    <sl-option value="POST">POST</sl-option>
+                    <sl-option value="PUT">PUT</sl-option>
+                    <sl-option value="DELETE">DELETE</sl-option>
+                    <sl-option value="*">所有 (*)</sl-option>
+                </sl-select><br>
+                <sl-input name="description" label="描述"></sl-input>
+            </form>
+            <div style="margin-top: 1rem; text-align: right;"><sl-button variant="primary" id="savePermBtn">保存</sl-button></div>
+        `;
+        openModal("添加权限", html);
+        
+        document.getElementById('savePermBtn').onclick = async () => {
+            const form = document.getElementById('permForm');
+            const data = {
+                obj: form.querySelector('[name="obj"]').value,
+                act: form.querySelector('[name="act"]').value,
+                description: form.querySelector('[name="description"]').value
+            };
+            if(!data.obj) return notify("路径必填", "warning");
+            
+            try {
+                await fetchData("/permissions", "POST", data);
+                dialog.hide();
+                loadPermissionsPage();
+                notify("添加成功", "success");
+            } catch(e) { notify(e.message, 'danger'); }
+        };
+    };
+
+    window.deletePermission = async (obj, act) => {
+        if(!confirm(`删除 ${obj} : ${act} ?`)) return;
+        try {
+            await fetchData(`/permissions?obj=${encodeURIComponent(obj)}&act=${encodeURIComponent(act)}`, "DELETE");
+            loadPermissionsPage();
+            notify("删除成功", "success");
+        } catch(e) { notify(e.message, 'danger'); }
+    }
+
+    // --- 外部应用 (简化版) ---
+    async function loadExternalAppsPage() {
+        const content = document.getElementById('content');
+        content.innerHTML = `<div class="card-header"><h3>外部应用</h3><sl-button variant="primary" onclick="alert('Demo: Create App')">创建应用</sl-button></div>
+        <sl-alert open variant="primary"><sl-icon slot="icon" name="info-circle"></sl-icon>此功能展示方式与用户管理类似，此处略过重复代码。</sl-alert>
+        <table class="custom-table mt-4"><thead><tr><th>应用ID</th><th>名称</th><th>App Key</th><th>状态</th></tr></thead>
+        <tbody><tr><td colspan="4" style="text-align:center;">演示数据为空</td></tr></tbody></table>`;
+        
+        // 实际逻辑可复用 loadUsersPage 的模式
+        try {
+            const apps = await fetchData("/external/apps");
+            if(apps.length) {
+                document.querySelector('tbody').innerHTML = apps.map(app => `
+                    <tr><td>${app.ID}</td><td>${app.name}</td><td>${app.app_key}</td><td>${app.status===1?'启用':'禁用'}</td></tr>
+                `).join('');
+            }
+        } catch(e){}
+    }
+    
+    // --- 外部用户 (简化版) ---
+    async function loadExternalUsersPage() {
+         document.getElementById('content').innerHTML = `<div class="card-header"><h3>外部用户</h3></div><sl-alert open>功能结构同用户管理。</sl-alert>`;
+    }
+
+    // --- 接口文档 ---
+    async function loadApiDocsPage() {
+        document.getElementById('content').innerHTML = `
+            <h3>API 文档</h3>
+            <sl-details summary="认证相关" open>
+                <table class="custom-table">
+                    <tr><th>方法</th><th>路径</th><th>描述</th></tr>
+                    <tr><td>POST</td><td>/login</td><td>登录获取 Token</td></tr>
+                </table>
+            </sl-details>
+            <br>
+            <sl-details summary="用户管理">
+                <table class="custom-table">
+                    <tr><th>方法</th><th>路径</th><th>描述</th></tr>
+                    <tr><td>GET</td><td>/api/v1/users</td><td>获取用户列表</td></tr>
+                    <tr><td>POST</td><td>/api/v1/users</td><td>创建用户</td></tr>
+                </table>
+            </sl-details>
+        `;
+    }
+
+    // --- 工具函数 ---
+
+    async function fetchData(endpoint, method = "GET", data = null) {
+      const options = {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: currentToken ? `Bearer ${currentToken}` : "",
+        },
+      };
+
+      if (data) options.body = JSON.stringify(data);
+
+      let response;
+      try {
+        response = await fetch(`${API_BASE}${endpoint}`, options);
+      } catch (error) {
+        throw new Error(`网络请求失败: ${error.message}`);
+      }
+
+      let result;
+      try {
+        result = await response.json();
+      } catch (error) {
+        throw new Error(`响应解析失败: ${error.message}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(result.message || `请求失败 (状态码: ${response.status})`);
+      }
+      return result.data !== undefined ? result.data : result;
+    }
+
+    window.deleteItem = async (endpoint, pageToReload) => {
+        if(!confirm("确定删除吗？")) return;
+        try {
+            await fetchData(endpoint, "DELETE");
+            notify("删除成功", "success");
+            loadPageContent(pageToReload);
+        } catch(e) { notify(e.message, 'danger'); }
+    };
+
+    function openModal(title, contentHtml) {
+        dialog.label = title;
+        document.getElementById("dialogContent").innerHTML = contentHtml;
+        dialog.show();
+    }
+
+    function formatDate(dateString) {
+      if(!dateString) return '-';
+      const date = new Date(dateString);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    }
+
+    function getMethodColor(method) {
+        switch (method) {
+            case "GET": return "success";
+            case "POST": return "primary";
+            case "PUT": return "warning";
+            case "DELETE": return "danger";
+            default: return "neutral";
+        }
+    }
+  </script>
 </body>
 </html>

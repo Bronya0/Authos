@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -27,8 +30,33 @@ func (h *RoleHandler) CreateRole(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
 
+	// 数据验证
+	if role.Code == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role code is required"})
+	}
+	if role.Name == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role name is required"})
+	}
+	if len(role.Code) > 50 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role code cannot exceed 50 characters"})
+	}
+	if len(role.Name) > 50 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role name cannot exceed 50 characters"})
+	}
+
 	if err := h.RoleService.CreateRole(&role); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to create role"})
+		// 记录详细错误信息
+		log.Printf("Failed to create role: %v", err)
+		
+		// 根据错误类型返回不同的错误信息
+		if strings.Contains(err.Error(), "already exists") {
+			return c.JSON(http.StatusConflict, map[string]string{"message": fmt.Sprintf("Role with code '%s' already exists", role.Code)})
+		}
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return c.JSON(http.StatusConflict, map[string]string{"message": "Role code already exists"})
+		}
+		
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to create role: %v", err)})
 	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
@@ -70,7 +98,9 @@ func (h *RoleHandler) DeleteRole(c echo.Context) error {
 	}
 
 	if err := h.RoleService.DeleteRole(uint(id)); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to delete role"})
+		// Log the actual error for debugging
+		log.Printf("Error deleting role %d: %v", id, err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to delete role: %v", err)})
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Role deleted successfully"})

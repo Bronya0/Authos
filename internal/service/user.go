@@ -21,6 +21,16 @@ func NewUserService(db *gorm.DB) *UserService {
 
 // CreateUser 创建用户
 func (s *UserService) CreateUser(user *model.User) error {
+	// 检查用户名是否已存在
+	var count int64
+	if err := s.DB.Model(&model.User{}).Where("username = ?", user.Username).Count(&count).Error; err != nil {
+		return fmt.Errorf("failed to check user existence: %w", err)
+	}
+	
+	if count > 0 {
+		return fmt.Errorf("user with username '%s' already exists", user.Username)
+	}
+
 	// 密码加密
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -32,17 +42,17 @@ func (s *UserService) CreateUser(user *model.User) error {
 	return s.DB.Transaction(func(tx *gorm.DB) error {
 		// 创建用户
 		if err := tx.Create(user).Error; err != nil {
-			return err
+			return fmt.Errorf("failed to create user: %w", err)
 		}
 
 		// 关联角色
 		if len(user.RoleIDs) > 0 {
 			var roles []*model.Role
 			if err := tx.Where("id IN ?", user.RoleIDs).Find(&roles).Error; err != nil {
-				return err
+				return fmt.Errorf("failed to find roles: %w", err)
 			}
 			if err := tx.Model(user).Association("Roles").Replace(roles); err != nil {
-				return err
+				return fmt.Errorf("failed to associate roles: %w", err)
 			}
 		}
 

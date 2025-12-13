@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+
 	"gorm.io/gorm"
 
 	"Authos/internal/model"
@@ -23,7 +24,20 @@ func NewRoleService(db *gorm.DB, casbinService *CasbinService) *RoleService {
 
 // CreateRole 创建角色
 func (s *RoleService) CreateRole(role *model.Role) error {
-	return s.DB.Create(role).Error
+	// 检查角色代码是否已存在
+	var count int64
+	if err := s.DB.Model(&model.Role{}).Where("code = ?", role.Code).Count(&count).Error; err != nil {
+		return fmt.Errorf("failed to check role existence: %w", err)
+	}
+	
+	if count > 0 {
+		return fmt.Errorf("role with code '%s' already exists", role.Code)
+	}
+
+	if err := s.DB.Create(role).Error; err != nil {
+		return fmt.Errorf("failed to create role: %w", err)
+	}
+	return nil
 }
 
 // UpdateRole 更新角色
@@ -33,25 +47,30 @@ func (s *RoleService) UpdateRole(role *model.Role) error {
 
 // DeleteRole 删除角色
 func (s *RoleService) DeleteRole(id uint) error {
-	// 开始事务
+	// 先删除相关的 Casbin 策略（在事务外）
+	roleKey := fmt.Sprintf("role:%d", id)
+	
+	// 移除用户-角色关联
+	if err := s.CasbinService.RemoveFilteredPolicy(1, roleKey); err != nil {
+		return fmt.Errorf("failed to remove user-role policies for role %d: %w", id, err)
+	}
+	// 移除角色-权限关联
+	if err := s.CasbinService.RemoveFilteredPolicy(0, roleKey); err != nil {
+		return fmt.Errorf("failed to remove role-permission policies for role %d: %w", id, err)
+	}
+
+	// 重新加载策略
+	if err := s.CasbinService.LoadPolicy(); err != nil {
+		return fmt.Errorf("failed to reload Casbin policies after deleting role %d: %w", id, err)
+	}
+
+	// 在事务中删除角色
 	return s.DB.Transaction(func(tx *gorm.DB) error {
 		// 删除角色
 		if err := tx.Delete(&model.Role{}, id).Error; err != nil {
-			return err
+			return fmt.Errorf("failed to delete role with ID %d: %w", id, err)
 		}
-
-		// 删除相关的 Casbin 策略
-		// 移除用户-角色关联
-		if err := s.CasbinService.RemoveFilteredPolicy(1, fmt.Sprintf("role:%d", id)); err != nil {
-			return err
-		}
-		// 移除角色-权限关联
-		if err := s.CasbinService.RemoveFilteredPolicy(0, fmt.Sprintf("role:%d", id)); err != nil {
-			return err
-		}
-
-		// 重新加载策略
-		return s.CasbinService.LoadPolicy()
+		return nil
 	})
 }
 

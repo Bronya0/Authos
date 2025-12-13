@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -27,8 +30,30 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
 
+	// 数据验证
+	if user.Username == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Username is required"})
+	}
+	if len(user.Username) > 50 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Username cannot exceed 50 characters"})
+	}
+	if user.Password == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Password is required"})
+	}
+
 	if err := h.UserService.CreateUser(&user); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to create user"})
+		// 记录详细错误信息
+		log.Printf("Failed to create user: %v", err)
+		
+		// 根据错误类型返回不同的错误信息
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return c.JSON(http.StatusConflict, map[string]string{"message": fmt.Sprintf("Username '%s' already exists", user.Username)})
+		}
+		if strings.Contains(err.Error(), "already exists") {
+			return c.JSON(http.StatusConflict, map[string]string{"message": fmt.Sprintf("Username '%s' already exists", user.Username)})
+		}
+		
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to create user: %v", err)})
 	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
