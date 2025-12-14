@@ -117,6 +117,10 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import {
+  NCard, NSteps, NStep, NSelect, NButton, NIcon,
+  NForm, NFormItem, NInput, NTag, NAlert
+} from 'naive-ui'
 import { Person, LockClosed, Add } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/auth'
 import { useAppStore } from '../stores/app'
@@ -198,7 +202,7 @@ const generateAppName = () => {
 const fetchApplications = async () => {
   try {
     const response = await applicationAPI.getApplications()
-    applications.value = response.items || response
+    applications.value = response.apps || response.items || response
   } catch (error) {
     console.warn('获取应用列表失败，使用空列表', error)
     applications.value = []
@@ -216,6 +220,13 @@ const handleContinueWithSelectedApp = () => {
     appStore.showWarning('请先选择应用')
     return
   }
+
+  // 设置当前应用
+  const selectedApp = applications.value.find(app => app.id === selectedAppId.value)
+  if (selectedApp) {
+    appStore.setCurrentApp(selectedApp)
+  }
+
   currentStep.value = 'user-login'
 }
 
@@ -228,6 +239,9 @@ const handleCreateApp = async () => {
     const newApp = await applicationAPI.createApplication(createAppForm)
     applications.value.push(newApp)
     selectedAppId.value = newApp.id
+
+    // 设置当前应用
+    appStore.setCurrentApp(newApp)
 
     appStore.showSuccess('应用创建成功')
     currentStep.value = 'user-login'
@@ -264,6 +278,15 @@ const handleLogin = async () => {
       const response = await authAPI.login(loginData)
       authStore.setAuth(response.user, response.token, response.app)
       appStore.showSuccess('登录成功')
+
+      // 如果登录响应中包含应用信息，设置当前应用
+      if (response.app) {
+        appStore.setCurrentApp(response.app)
+      } else if (selectedApp.value) {
+        // 如果有选中的应用，也设置它
+        appStore.setCurrentApp(selectedApp.value)
+      }
+
       router.push('/dashboard')
     } catch (error) {
       // 模拟登录作为后备方案

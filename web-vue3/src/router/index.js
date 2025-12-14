@@ -1,12 +1,27 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
 
 const routes = [
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('../views/Login.vue'),
+    path: '/system-login',
+    name: 'SystemLogin',
+    component: () => import('../views/SystemLogin.vue'),
     meta: { requiresAuth: false }
+  },
+  {
+    path: '/app-login',
+    name: 'AppLogin',
+    component: () => import('../views/AppLogin.vue'),
+    meta: { requiresSystemAuth: true }
+  },
+  {
+    path: '/app-selection',
+    name: 'AppSelection',
+    component: () => import('../views/AppSelection.vue'),
+    meta: { requiresSystemAuth: true }
+  },
+  {
+    path: '/login',
+    redirect: '/system-login'
   },
   {
     path: '/',
@@ -21,6 +36,12 @@ const routes = [
         meta: { title: '仪表盘', icon: 'speedometer' }
       },
       {
+        path: 'applications',
+        name: 'Applications',
+        component: () => import('../views/Applications.vue'),
+        meta: { title: '应用管理', icon: 'apps' }
+      },
+      {
         path: 'users',
         name: 'Users',
         component: () => import('../views/Users.vue'),
@@ -30,13 +51,13 @@ const routes = [
         path: 'roles',
         name: 'Roles',
         component: () => import('../views/Roles.vue'),
-        meta: { title: '角色管理', icon: 'person-badge' }
+        meta: { title: '角色管理', icon: 'person' }
       },
       {
         path: 'menus',
         name: 'Menus',
         component: () => import('../views/Menus.vue'),
-        meta: { title: '菜单管理', icon: 'list-ul' }
+        meta: { title: '菜单管理', icon: 'list' }
       },
       {
         path: 'permissions',
@@ -45,46 +66,50 @@ const routes = [
         meta: { title: '权限配置', icon: 'key' }
       },
       {
-        path: 'applications',
-        name: 'Applications',
-        component: () => import('../views/Applications.vue'),
-        meta: { title: '应用管理', icon: 'apps' }
-      },
-      {
         path: 'api-docs',
         name: 'ApiDocs',
         component: () => import('../views/ApiDocs.vue'),
         meta: { title: '接口文档', icon: 'book' }
-      },
-      {
-        path: 'test',
-        name: 'Test',
-        component: () => import('../views/Test.vue'),
-        meta: { title: '测试', icon: 'test' }
       }
     ]
   }
 ]
 
+// 创建路由实例
 const router = createRouter({
   history: createWebHistory(),
   routes
 })
 
-// 路由守卫
+// 路由守卫 - 支持多级认证
 router.beforeEach((to, from, next) => {
-  const authStore = useAuthStore()
-  
-  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
-    next('/login')
-  } else if (to.path === '/login' && authStore.isLoggedIn) {
-    next('/')
-  } else if (to.path === '/' && authStore.isLoggedIn) {
-    // 根路径重定向到仪表盘
-    next('/dashboard')
-  } else {
-    next()
+  // 检查是否需要系统管理员认证
+  if (to.meta.requiresSystemAuth) {
+    const systemToken = localStorage.getItem('systemToken')
+    if (!systemToken) {
+      next('/system-login')
+      return
+    }
   }
+  
+  // 检查是否需要完整认证（系统+应用）
+  if (to.meta.requiresAuth) {
+    const systemToken = localStorage.getItem('systemToken')
+    const appToken = localStorage.getItem('appToken')
+    
+    if (!systemToken) {
+      next('/system-login')
+      return
+    }
+    
+    if (!appToken) {
+      next('/app-selection')
+      return
+    }
+  }
+  
+  // 其他情况继续导航
+  next()
 })
 
 export default router

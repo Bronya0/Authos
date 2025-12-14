@@ -17,63 +17,109 @@
     </n-card>
 
     <!-- 创建应用模态框 -->
-    <n-modal v-model:show="showCreateModal">
-      <n-card style="width: 500px" title="创建应用" :bordered="false" size="huge" role="dialog" aria-modal="true">
-        <n-form ref="formRef" :model="createForm" :rules="rules">
-          <n-form-item path="code" label="应用代码">
-            <n-input v-model:value="createForm.code" placeholder="请输入应用代码，如: myapp" @blur="generateName" />
-          </n-form-item>
-          <n-form-item path="name" label="应用名称">
-            <n-input v-model:value="createForm.name" placeholder="请输入应用名称" />
-          </n-form-item>
-          <n-form-item path="description" label="应用描述">
-            <n-input v-model:value="createForm.description" type="textarea" placeholder="请输入应用描述" :rows="3" />
-          </n-form-item>
-        </n-form>
+    <n-modal v-model:show="showCreateModal" preset="dialog" title="创建应用">
+      <n-form ref="formRef" :model="createForm" :rules="rules">
+        <n-form-item path="code" label="应用代码">
+          <n-input v-model:value="createForm.code" placeholder="请输入应用代码，如: myapp" @blur="generateName" />
+        </n-form-item>
+        <n-form-item path="name" label="应用名称">
+          <n-input v-model:value="createForm.name" placeholder="请输入应用名称" />
+        </n-form-item>
+        <n-form-item path="description" label="应用描述">
+          <n-input v-model:value="createForm.description" type="textarea" placeholder="请输入应用描述" :rows="3" />
+        </n-form-item>
+      </n-form>
 
-        <template #footer>
-          <div class="flex justify-end gap-2">
-            <n-button @click="showCreateModal = false">取消</n-button>
-            <n-button type="primary" :loading="creating" @click="handleCreate">
-              创建
-            </n-button>
-          </div>
-        </template>
-      </n-card>
+      <template #action>
+        <div class="flex justify-end gap-2">
+          <n-button @click="showCreateModal = false">取消</n-button>
+          <n-button type="primary" :loading="creating" @click="handleCreate">
+            创建
+          </n-button>
+        </div>
+      </template>
     </n-modal>
 
     <!-- 编辑应用模态框 -->
-    <n-modal v-model:show="showEditModal">
-      <n-card style="width: 500px" title="编辑应用" :bordered="false" size="huge" role="dialog" aria-modal="true">
-        <n-form ref="editFormRef" :model="editForm" :rules="rules">
-          <n-form-item path="code" label="应用代码">
-            <n-input v-model:value="editForm.code" disabled />
-          </n-form-item>
-          <n-form-item path="name" label="应用名称">
-            <n-input v-model:value="editForm.name" />
-          </n-form-item>
-          <n-form-item path="description" label="应用描述">
-            <n-input v-model:value="editForm.description" type="textarea" :rows="3" />
-          </n-form-item>
-        </n-form>
+    <n-modal v-model:show="showEditModal" preset="dialog" title="编辑应用">
+      <n-form ref="editFormRef" :model="editForm" :rules="rules">
+        <n-form-item path="code" label="应用代码">
+          <n-input v-model:value="editForm.code" disabled />
+        </n-form-item>
+        <n-form-item path="name" label="应用名称">
+          <n-input v-model:value="editForm.name" />
+        </n-form-item>
+        <n-form-item path="description" label="应用描述">
+          <n-input v-model:value="editForm.description" type="textarea" :rows="3" />
+        </n-form-item>
+      </n-form>
 
-        <template #footer>
-          <div class="flex justify-end gap-2">
-            <n-button @click="showEditModal = false">取消</n-button>
-            <n-button type="primary" :loading="updating" @click="handleUpdate">
-              更新
+      <template #action>
+        <div class="flex justify-end gap-2">
+          <n-button @click="showEditModal = false">取消</n-button>
+          <n-button type="primary" :loading="updating" @click="handleUpdate">
+            更新
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- 应用创建成功模态框 -->
+    <n-modal v-model:show="showSuccessModal" preset="dialog" title="应用创建成功">
+      <n-alert type="success" class="mb-4">
+        应用已成功创建，请保存以下信息，应用密钥仅在创建时显示一次！
+      </n-alert>
+
+      <n-form label-placement="left" label-width="100px">
+        <n-form-item label="应用ID">
+          <n-input :value="createdApp.id" readonly />
+          <template #suffix>
+            <n-button text @click="copyToClipboard(createdApp.id)">
+              <template #icon>
+                <n-icon><copy-outline /></n-icon>
+              </template>
             </n-button>
-          </div>
-        </template>
-      </n-card>
+          </template>
+        </n-form-item>
+
+        <n-form-item label="应用UUID">
+          <n-input :value="createdApp.uuid" readonly />
+          <template #suffix>
+            <n-button text @click="copyToClipboard(createdApp.uuid)">
+              <template #icon>
+                <n-icon><copy-outline /></n-icon>
+              </template>
+            </n-button>
+          </template>
+        </n-form-item>
+
+        <n-form-item label="应用密钥">
+          <n-input :value="createdApp.secretKey" readonly type="password" show-password-on="click" />
+          <template #suffix>
+            <n-button text @click="copyToClipboard(createdApp.secretKey)">
+              <template #icon>
+                <n-icon><copy-outline /></n-icon>
+              </template>
+            </n-button>
+          </template>
+        </n-form-item>
+      </n-form>
+
+      <template #action>
+        <div class="flex justify-end gap-2">
+          <n-button type="primary" @click="showSuccessModal = false">
+            我已保存
+          </n-button>
+        </div>
+      </template>
     </n-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, h } from 'vue'
-import { useMessage, NButton, NIcon, NTag } from 'naive-ui'
-import { Add, PencilOutline, TrashOutline, Play } from '@vicons/ionicons5'
+import { useMessage, NButton, NIcon, NTag, NForm, NFormItem, NInput, NModal, NCard, NAlert, NText } from 'naive-ui'
+import { Add, PencilOutline, TrashOutline, Play, CopyOutline } from '@vicons/ionicons5'
 import { applicationAPI } from '../api'
 
 const message = useMessage()
@@ -85,7 +131,9 @@ const creating = ref(false)
 const updating = ref(false)
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
+const showSuccessModal = ref(false)
 const currentApp = ref(null)
+const createdApp = ref({})
 
 // 表单引用
 const formRef = ref()
@@ -143,7 +191,8 @@ const columns = [
     key: 'description',
     ellipsis: {
       tooltip: true
-    }
+    },
+    width: 250
   },
   {
     title: '创建时间',
@@ -217,8 +266,14 @@ const fetchApplications = async () => {
   try {
     loading.value = true
     const response = await applicationAPI.getApplications()
-    applications.value = response.items || response
+    applications.value = response.apps || response.items || response
     pagination.itemCount = response.total || applications.value.length
+
+    // 调试输出
+    console.log('Fetched applications:', applications.value)
+    if (applications.value.length > 0) {
+      console.log('First application ID:', applications.value[0].id, 'Type:', typeof applications.value[0].id)
+    }
   } catch (error) {
     message.error('获取应用列表失败')
     console.error(error)
@@ -230,13 +285,37 @@ const fetchApplications = async () => {
 // 创建应用
 const handleCreate = async () => {
   try {
+    console.log('Starting application creation with form:', createForm)
     await formRef.value?.validate()
     creating.value = true
 
-    await applicationAPI.createApplication(createForm)
+    console.log('Sending create application request...')
+    const response = await applicationAPI.createApplication(createForm)
+    console.log('Create application response:', response)
     message.success('应用创建成功')
+    console.log('API Response:', response);
+
+    // 保存创建的应用信息，包括ID和密钥
+    const appInfo = {
+      id: response.appId || response.app?.id || '',
+      uuid: response.appUuid || response.app?.uuid || '',
+      secretKey: response.secretKey || '',
+      code: createForm.code,
+      name: createForm.name,
+      description: createForm.description || ''
+    }
+
+    createdApp.value = appInfo
+    console.log('Created app info:', appInfo)
+
+    // 关闭创建模态框，显示成功模态框
     showCreateModal.value = false
+    showSuccessModal.value = true
+
+    // 重置表单
     Object.assign(createForm, { code: '', name: '', description: '' })
+
+    // 刷新应用列表
     fetchApplications()
   } catch (error) {
     if (error.response?.status === 409) {
@@ -286,6 +365,7 @@ const handleUpdate = async () => {
 // 删除应用
 const handleDelete = async (row) => {
   try {
+    console.log('Deleting application with ID:', row.id, 'Type:', typeof row.id)
     await applicationAPI.deleteApplication(row.id)
     message.success('应用删除成功')
     fetchApplications()
@@ -297,9 +377,6 @@ const handleDelete = async (row) => {
 
 // 使用应用
 const handleUseApp = (row) => {
-  localStorage.setItem('appId', row.id)
-  localStorage.setItem('appCode', row.code)
-  localStorage.setItem('appInfo', JSON.stringify(row))
   message.success(`已选择应用: ${row.name}`)
 }
 
@@ -307,6 +384,23 @@ const handleUseApp = (row) => {
 const handlePageUpdate = (page) => {
   pagination.page = page
   fetchApplications()
+}
+
+// 复制到剪贴板
+const copyToClipboard = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success('已复制到剪贴板')
+  } catch (error) {
+    // 降级方案
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    message.success('已复制到剪贴板')
+  }
 }
 
 // 初始化

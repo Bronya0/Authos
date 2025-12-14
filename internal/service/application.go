@@ -31,12 +31,15 @@ func (s *ApplicationService) generateSecretKey() string {
 
 // CreateApplication 创建应用
 func (s *ApplicationService) CreateApplication(name, code, description string) (*model.Application, error) {
-	// 检查应用代码是否已存在
+	fmt.Printf("CreateApplication called with name=%s, code=%s, description=%s\n", name, code, description)
+
+	// 检查应用代码是否已存在（包括软删除的记录）
 	var count int64
-	if err := s.DB.Model(&model.Application{}).Where("code = ?", code).Count(&count).Error; err != nil {
+	if err := s.DB.Unscoped().Model(&model.Application{}).Where("code = ?", code).Count(&count).Error; err != nil {
 		return nil, fmt.Errorf("failed to check application existence: %w", err)
 	}
 
+	fmt.Printf("Found %d applications with code '%s'\n", count, code)
 	if count > 0 {
 		return nil, fmt.Errorf("application with code '%s' already exists", code)
 	}
@@ -94,8 +97,28 @@ func (s *ApplicationService) UpdateApplication(id, name, code, description strin
 
 // DeleteApplication 删除应用
 func (s *ApplicationService) DeleteApplication(id string) error {
+	fmt.Printf("DeleteApplication called with ID: %s\n", id)
 	appID := s.parseID(id)
-	return s.DB.Delete(&model.Application{}, appID).Error
+	fmt.Printf("Parsed ID: %d\n", appID)
+	if appID == 0 {
+		return fmt.Errorf("invalid application ID: %s", id)
+	}
+
+	// 先检查应用是否存在
+	var app model.Application
+	if err := s.DB.First(&app, appID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("application with ID %s not found", id)
+		}
+		return err
+	}
+
+	fmt.Printf("Application found: %+v\n", app)
+
+	// 删除应用 - 使用Unscoped()确保真正删除记录，而不是软删除
+	result := s.DB.Unscoped().Delete(&model.Application{}, appID)
+	fmt.Printf("Delete result: %d rows affected\n", result.RowsAffected)
+	return result.Error
 }
 
 // GetApplicationByID 根据ID获取应用
@@ -108,10 +131,29 @@ func (s *ApplicationService) GetApplicationByID(id string) (*model.Application, 
 	return &app, nil
 }
 
+// GetApplicationByIDWithoutSecret 根据ID获取应用（不包含密钥）
+func (s *ApplicationService) GetApplicationByIDWithoutSecret(id string) (*model.Application, error) {
+	app, err := s.GetApplicationByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 创建不包含密钥的副本
+	appCopy := *app
+	appCopy.SecretKey = ""
+
+	return &appCopy, nil
+}
+
 // parseID 解析字符串ID为uint
 func (s *ApplicationService) parseID(idStr string) uint {
 	var id uint
-	fmt.Sscanf(idStr, "%d", &id)
+	// 尝试解析为uint
+	_, err := fmt.Sscanf(idStr, "%d", &id)
+	if err != nil {
+		// 如果解析失败，返回0，表示无效ID
+		return 0
+	}
 	return id
 }
 
@@ -124,12 +166,32 @@ func (s *ApplicationService) GetApplicationByCode(code string) (*model.Applicati
 	return &app, nil
 }
 
+// GetApplicationByCodeWithoutSecret 根据代码获取应用（不包含密钥）
+func (s *ApplicationService) GetApplicationByCodeWithoutSecret(code string) (*model.Application, error) {
+	app, err := s.GetApplicationByCode(code)
+	if err != nil {
+		return nil, err
+	}
+
+	// 创建不包含密钥的副本
+	appCopy := *app
+	appCopy.SecretKey = ""
+
+	return &appCopy, nil
+}
+
 // ListApplications 列出所有应用
 func (s *ApplicationService) ListApplications() ([]*model.Application, error) {
 	var apps []*model.Application
 	if err := s.DB.Order("id asc").Find(&apps).Error; err != nil {
 		return nil, err
 	}
+
+	// 清除所有应用的密钥
+	for _, app := range apps {
+		app.SecretKey = ""
+	}
+
 	return apps, nil
 }
 

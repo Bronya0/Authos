@@ -1,7 +1,9 @@
 <template>
   <n-config-provider :theme="theme">
     <n-message-provider>
-      <AppContent />
+      <n-modal-provider>
+        <AppContent />
+      </n-modal-provider>
     </n-message-provider>
   </n-config-provider>
 </template>

@@ -33,6 +33,9 @@ func corsConfig() echo.MiddlewareFunc {
 			"Content-Type",
 			"Authorization",
 			"X-Requested-With",
+			"X-System-Token",
+			"X-App-Token",
+			"X-App-ID",
 		},
 		AllowCredentials: true,
 	})
@@ -72,7 +75,7 @@ func main() {
 	jwtConfig := utils.NewJWTConfig(jwtSecret, jwtExpireTime)
 
 	// 初始化 HTTP 处理器
-	authHandler := handler.NewAuthHandler(userService, jwtConfig)
+	authHandler := handler.NewAuthHandler(userService, applicationService, jwtConfig)
 	userHandler := handler.NewUserHandler(userService)
 	roleHandler := handler.NewRoleHandler(roleService)
 	menuHandler := handler.NewMenuHandler(menuService)
@@ -96,19 +99,21 @@ func main() {
 	// e.StaticFS("/", webFS)
 
 	// 公共路由
-	public := e.Group("")
+	public := e.Group("/api/v1")
 	{
 		// 认证相关
-		public.POST("/api/v1/login", authHandler.Login)
-		public.POST("/api/v1/logout", authHandler.Logout)
+		public.POST("/login", authHandler.Login)
+		public.POST("/system-login", authHandler.SystemLogin)
+		public.POST("/app-login", authHandler.AppLogin)
+		public.POST("/logout", authHandler.Logout)
 
-		// 应用相关（不需要认证）
+		// 应用相关
 		public.GET("/applications/:code", applicationHandler.GetApplicationByCode)
-		public.GET("/api/v1/applications", applicationHandler.ListApplications)
-		public.POST("/api/v1/applications", applicationHandler.CreateApplication)
-		public.GET("/api/v1/applications/:id", applicationHandler.GetApplication)
-		public.PUT("/api/v1/applications/:id", applicationHandler.UpdateApplication)
-		public.DELETE("/api/v1/applications/:id", applicationHandler.DeleteApplication)
+		public.GET("/applications", applicationHandler.ListApplications)
+		public.POST("/applications", applicationHandler.CreateApplication)
+		public.GET("/applications/:id", applicationHandler.GetApplication)
+		public.PUT("/applications/:id", applicationHandler.UpdateApplication)
+		public.DELETE("/applications/:id", applicationHandler.DeleteApplication)
 	}
 
 	// API 路由 - 需要 JWT 认证

@@ -21,6 +21,20 @@ type JWTClaims struct {
 	jwt.RegisteredClaims
 }
 
+// SystemJWTClaims 系统管理员JWT声明
+type SystemJWTClaims struct {
+	Username string `json:"username"`
+	IsAdmin  bool   `json:"isAdmin"`
+	jwt.RegisteredClaims
+}
+
+// AppJWTClaims 应用JWT声明
+type AppJWTClaims struct {
+	AppID   uint   `json:"appId"`
+	AppCode string `json:"appCode"`
+	jwt.RegisteredClaims
+}
+
 // NewJWTConfig 创建JWT配置实例
 func NewJWTConfig(secretKey string, expireTime time.Duration) *JWTConfig {
 	return &JWTConfig{
@@ -35,6 +49,38 @@ func (j *JWTConfig) GenerateToken(userID uint, username string, appID uint) (str
 		UserID:   userID,
 		Username: username,
 		AppID:    appID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(j.ExpireTime)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(j.SecretKey))
+}
+
+// GenerateSystemToken 生成系统管理员JWT令牌
+func (j *JWTConfig) GenerateSystemToken(username string) (string, error) {
+	claims := SystemJWTClaims{
+		Username: username,
+		IsAdmin:  true,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(j.ExpireTime)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(j.SecretKey))
+}
+
+// GenerateAppToken 生成应用JWT令牌
+func (j *JWTConfig) GenerateAppToken(appID uint, appCode string) (string, error) {
+	claims := AppJWTClaims{
+		AppID:   appID,
+		AppCode: appCode,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(j.ExpireTime)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -61,4 +107,38 @@ func (j *JWTConfig) ParseToken(tokenString string) (*JWTClaims, error) {
 	}
 
 	return nil, errors.New("invalid token")
+}
+
+// ParseSystemToken 解析系统管理员JWT令牌
+func (j *JWTConfig) ParseSystemToken(tokenString string) (*SystemJWTClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &SystemJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(j.SecretKey), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*SystemJWTClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, errors.New("invalid system token")
+}
+
+// ParseAppToken 解析应用JWT令牌
+func (j *JWTConfig) ParseAppToken(tokenString string) (*AppJWTClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &AppJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(j.SecretKey), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*AppJWTClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, errors.New("invalid app token")
 }

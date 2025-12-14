@@ -49,9 +49,11 @@ func (h *ApplicationHandler) CreateApplication(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"app":      app,
-		"message":  "Application created successfully",
-		"secretKey": app.SecretKey, // 注意：仅在创建时返回密钥
+		"app":       app,
+		"message":   "Application created successfully",
+		"appId":     app.ID,        // 返回应用ID
+		"appUuid":   app.UUID,      // 返回应用UUID
+		"secretKey": app.SecretKey, // 返回应用密钥
 	})
 }
 
@@ -63,7 +65,7 @@ func (h *ApplicationHandler) ListApplications(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"apps": apps,
+		"apps":  apps,
 		"total": len(apps),
 	})
 }
@@ -71,8 +73,8 @@ func (h *ApplicationHandler) ListApplications(c echo.Context) error {
 // GetApplication 获取应用详情
 func (h *ApplicationHandler) GetApplication(c echo.Context) error {
 	id := c.Param("id")
-	
-	app, err := h.ApplicationService.GetApplicationByID(id)
+
+	app, err := h.ApplicationService.GetApplicationByIDWithoutSecret(id)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"message": "Application not found"})
 	}
@@ -86,7 +88,7 @@ func (h *ApplicationHandler) GetApplication(c echo.Context) error {
 func (h *ApplicationHandler) UpdateApplication(c echo.Context) error {
 	id := c.Param("id")
 	var req UpdateApplicationRequest
-	
+
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
@@ -105,7 +107,7 @@ func (h *ApplicationHandler) UpdateApplication(c echo.Context) error {
 // DeleteApplication 删除应用
 func (h *ApplicationHandler) DeleteApplication(c echo.Context) error {
 	id := c.Param("id")
-	
+
 	if err := h.ApplicationService.DeleteApplication(id); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
@@ -116,8 +118,8 @@ func (h *ApplicationHandler) DeleteApplication(c echo.Context) error {
 // GetApplicationByCode 根据代码获取应用
 func (h *ApplicationHandler) GetApplicationByCode(c echo.Context) error {
 	code := c.Param("code")
-	
-	app, err := h.ApplicationService.GetApplicationByCode(code)
+
+	app, err := h.ApplicationService.GetApplicationByCodeWithoutSecret(code)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"message": "Application not found"})
 	}

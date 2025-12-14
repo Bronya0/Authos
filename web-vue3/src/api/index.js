@@ -1,22 +1,39 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
-  timeout: 10000
+  baseURL: '/api/v1',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
 })
 
 // 请求拦截器
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    // 系统管理员认证
+    const systemToken = localStorage.getItem('systemToken')
+    if (systemToken) {
+      config.headers['X-System-Token'] = `Bearer ${systemToken}`
+    }
+    
+    // 应用认证
+    const appToken = localStorage.getItem('appToken')
+    if (appToken) {
+      config.headers['X-App-Token'] = `Bearer ${appToken}`
     }
     
     // 从localStorage获取应用ID并添加到请求头
-    const appId = localStorage.getItem('appId')
-    if (appId) {
-      config.headers['X-App-ID'] = appId
+    const currentApp = localStorage.getItem('currentApp')
+    if (currentApp) {
+      try {
+        const appData = JSON.parse(currentApp)
+        if (appData.id) {
+          config.headers['X-App-ID'] = appData.id
+        }
+      } catch (e) {
+        console.error('Failed to parse currentApp from localStorage', e)
+      }
     }
     
     return config
@@ -29,18 +46,25 @@ api.interceptors.response.use(
   response => response.data,
   error => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('currentUser')
-      localStorage.removeItem('appId')
-      localStorage.removeItem('appInfo')
-      window.location.href = '/login'
+      // 清除所有认证信息
+      localStorage.removeItem('systemToken')
+      localStorage.removeItem('systemUser')
+      localStorage.removeItem('appToken')
+      localStorage.removeItem('currentApp')
+      
+      // 重定向到系统登录页面
+      window.location.href = '/system-login'
     }
     return Promise.reject(error)
   }
 )
 
 export const authAPI = {
-  login: (data) => api.post('/login', data),
+  // 系统管理员登录
+  systemLogin: (data) => api.post('/system-login', data),
+  // 应用登录
+  appLogin: (data) => api.post('/app-login', data),
+  // 登出
   logout: () => api.post('/logout')
 }
 
@@ -94,12 +118,12 @@ export const apiPermissionAPI = {
 }
 
 export const applicationAPI = {
-  getApplications: () => api.get('/api/applications'),
-  getApplication: (id) => api.get(`/api/applications/${id}`),
-  createApplication: (data) => api.post('/api/applications', data),
-  updateApplication: (id, data) => api.put(`/api/applications/${id}`, data),
-  deleteApplication: (id) => api.delete(`/api/applications/${id}`),
-  getApplicationByCode: (code) => api.get(`/api/applications/${code}`)
+  getApplications: () => api.get('/applications'),
+  getApplication: (id) => api.get(`/applications/${id}`),
+  createApplication: (data) => api.post('/applications', data),
+  updateApplication: (id, data) => api.put(`/applications/${id}`, data),
+  deleteApplication: (id) => api.delete(`/applications/${id}`),
+  getApplicationByCode: (code) => api.get(`/applications/${code}`)
 }
 
 export default api
