@@ -19,16 +19,25 @@ func NewUserService(db *gorm.DB) *UserService {
 	return &UserService{DB: db}
 }
 
+// GetApplicationByCode 根据应用代码获取应用信息
+func (s *UserService) GetApplicationByCode(code string) (*model.Application, error) {
+	var app model.Application
+	if err := s.DB.Where("code = ?", code).First(&app).Error; err != nil {
+		return nil, err
+	}
+	return &app, nil
+}
+
 // CreateUser 创建用户
 func (s *UserService) CreateUser(user *model.User) error {
-	// 检查用户名是否已存在
+	// 检查用户名是否已存在（同一应用内）
 	var count int64
-	if err := s.DB.Model(&model.User{}).Where("username = ?", user.Username).Count(&count).Error; err != nil {
+	if err := s.DB.Model(&model.User{}).Where("username = ? AND app_id = ?", user.Username, user.AppID).Count(&count).Error; err != nil {
 		return fmt.Errorf("failed to check user existence: %w", err)
 	}
-	
+
 	if count > 0 {
-		return fmt.Errorf("user with username '%s' already exists", user.Username)
+		return fmt.Errorf("user with username '%s' already exists in this application", user.Username)
 	}
 
 	// 密码加密
@@ -45,10 +54,10 @@ func (s *UserService) CreateUser(user *model.User) error {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 
-		// 关联角色
+		// 关联角色（确保角色属于同一应用）
 		if len(user.RoleIDs) > 0 {
 			var roles []*model.Role
-			if err := tx.Where("id IN ?", user.RoleIDs).Find(&roles).Error; err != nil {
+			if err := tx.Where("id IN ? AND app_id = ?", user.RoleIDs, user.AppID).Find(&roles).Error; err != nil {
 				return fmt.Errorf("failed to find roles: %w", err)
 			}
 			if err := tx.Model(user).Association("Roles").Replace(roles); err != nil {
@@ -99,15 +108,15 @@ func (s *UserService) UpdateUserPassword(id uint, password string) error {
 	return s.DB.Model(&model.User{}).Where("id = ?", id).Update("password", string(hashedPassword)).Error
 }
 
-// DeleteUser 删除用户
-func (s *UserService) DeleteUser(id uint) error {
-	return s.DB.Delete(&model.User{}, id).Error
+// DeleteUser 删除用户（按应用隔离）
+func (s *UserService) DeleteUser(id uint, appID uint) error {
+	return s.DB.Where("id = ? AND app_id = ?", id, appID).Delete(&model.User{}).Error
 }
 
-// GetUserByID 根据ID获取用户
-func (s *UserService) GetUserByID(id uint) (*model.User, error) {
+// GetUserByID 根据ID获取用户（按应用隔离）
+func (s *UserService) GetUserByID(id uint, appID uint) (*model.User, error) {
 	var user model.User
-	if err := s.DB.Preload("Roles").First(&user, id).Error; err != nil {
+	if err := s.DB.Preload("Roles").Where("id = ? AND app_id = ?", id, appID).First(&user).Error; err != nil {
 		return nil, err
 	}
 
@@ -119,20 +128,25 @@ func (s *UserService) GetUserByID(id uint) (*model.User, error) {
 	return &user, nil
 }
 
-// GetUserByUsername 根据用户名获取用户
-func (s *UserService) GetUserByUsername(username string) (*model.User, error) {
+// GetUserByUsername 根据用户名获取用户（按应用隔离）
+func (s *UserService) GetUserByUsername(username string, appID uint) (*model.User, error) {
 	var user model.User
-	if err := s.DB.Preload("Roles").Where("username = ?", username).First(&user).Error; err != nil {
+	if err := s.DB.Preload("Roles").Where("username = ? AND app_id = ?", username, appID).First(&user).Error; err != nil {
 		return nil, err
+	}
+
+	// 填充 RoleIDs
+	for _, role := range user.Roles {
+		user.RoleIDs = append(user.RoleIDs, role.ID)
 	}
 
 	return &user, nil
 }
 
-// ListUsers 列出所有用户
-func (s *UserService) ListUsers() ([]*model.User, error) {
+// ListUsersByApp 列出指定应用的所有用户
+func (s *UserService) ListUsersByApp(appID uint) ([]*model.User, error) {
 	var users []*model.User
-	if err := s.DB.Preload("Roles").Find(&users).Error; err != nil {
+	if err := s.DB.Preload("Roles").Where("app_id = ?", appID).Find(&users).Error; err != nil {
 		return nil, err
 	}
 

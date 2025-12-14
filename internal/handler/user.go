@@ -25,26 +25,42 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 
 // CreateUser 创建用户
 func (h *UserHandler) CreateUser(c echo.Context) error {
-	var user model.User
-	if err := c.Bind(&user); err != nil {
+	// 定义创建用户请求结构体
+	type CreateUserRequest struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Status   int    `json:"status"`
+		RoleIDs  []uint `json:"roleIds"`
+	}
+
+	var req CreateUserRequest
+	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
 
 	// 数据验证
-	if user.Username == "" {
+	if req.Username == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Username is required"})
 	}
-	if len(user.Username) > 50 {
+	if len(req.Username) > 50 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Username cannot exceed 50 characters"})
 	}
-	if user.Password == "" {
+	if req.Password == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Password is required"})
 	}
 
-	if err := h.UserService.CreateUser(&user); err != nil {
+	// 创建用户对象
+	user := &model.User{
+		Username: req.Username,
+		Password: req.Password,
+		Status:   req.Status,
+		RoleIDs:  req.RoleIDs,
+	}
+
+	if err := h.UserService.CreateUser(user); err != nil {
 		// 记录详细错误信息
 		log.Printf("Failed to create user: %v", err)
-		
+
 		// 根据错误类型返回不同的错误信息
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return c.JSON(http.StatusConflict, map[string]string{"message": fmt.Sprintf("Username '%s' already exists", user.Username)})
@@ -52,7 +68,7 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		if strings.Contains(err.Error(), "already exists") {
 			return c.JSON(http.StatusConflict, map[string]string{"message": fmt.Sprintf("Username '%s' already exists", user.Username)})
 		}
-		
+
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to create user: %v", err)})
 	}
 
@@ -70,14 +86,38 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid user ID"})
 	}
 
-	var user model.User
-	if err := c.Bind(&user); err != nil {
+	// 定义更新请求结构
+	type UpdateUserRequest struct {
+		Username string `json:"username"`
+		Password string `json:"password,omitempty"`
+		Status   int    `json:"status"`
+		RoleIDs  []uint `json:"roleIds"`
+	}
+
+	var req UpdateUserRequest
+	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
+
+	// 创建用户对象并设置ID和RoleIDs
+	user := &model.User{
+		Username: req.Username,
+		Status:   req.Status,
+		RoleIDs:  req.RoleIDs,
+	}
+	// 设置ID（ID字段来自嵌入式gorm.Model）
 	user.ID = uint(id)
 
-	if err := h.UserService.UpdateUser(&user); err != nil {
+	// 更新用户信息
+	if err := h.UserService.UpdateUser(user); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update user"})
+	}
+
+	// 如果提供了密码，则更新密码
+	if req.Password != "" {
+		if err := h.UserService.UpdateUserPassword(uint(id), req.Password); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update password"})
+		}
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -94,7 +134,13 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid user ID"})
 	}
 
-	if err := h.UserService.DeleteUser(uint(id)); err != nil {
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	if err := h.UserService.DeleteUser(uint(id), appID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to delete user"})
 	}
 
@@ -109,7 +155,13 @@ func (h *UserHandler) GetUser(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid user ID"})
 	}
 
-	user, err := h.UserService.GetUserByID(uint(id))
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	user, err := h.UserService.GetUserByID(uint(id), appID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"message": "User not found"})
 	}
@@ -119,7 +171,13 @@ func (h *UserHandler) GetUser(c echo.Context) error {
 
 // ListUsers 列出所有用户
 func (h *UserHandler) ListUsers(c echo.Context) error {
-	users, err := h.UserService.ListUsers()
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	users, err := h.UserService.ListUsersByApp(appID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to get users"})
 	}

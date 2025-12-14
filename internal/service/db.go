@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"golang.org/x/crypto/bcrypt"
 	"github.com/glebarez/sqlite"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -57,19 +57,11 @@ func NewDBService() (*DBService, error) {
 // autoMigrate 自动迁移模型
 func autoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
+		&model.Application{},
 		&model.User{},
 		&model.Role{},
 		&model.Menu{},
-		&model.ExternalApp{},
-		&model.ExternalAppPermission{},
-		&model.ExternalAppToken{},
-		&model.ExternalAppMenu{},
-		&model.ExternalAppRole{},
-		&model.ExternalAppRoleMenu{},
-		&model.ExternalAppUser{},
-		&model.ExternalAppUserRole{},
-		&model.ExternalAppPermission{},
-		&model.ExternalAppRolePermission{},
+		&model.ApiPermission{},
 		// CasbinRule 会被 Gorm Adapter 自动迁移
 	)
 }
@@ -77,17 +69,28 @@ func autoMigrate(db *gorm.DB) error {
 // seedData 初始化种子数据
 func seedData(db *gorm.DB) error {
 	// 检查是否已经有数据
-	var userCount int64
-	db.Model(&model.User{}).Count(&userCount)
-	if userCount > 0 {
+	var appCount int64
+	db.Model(&model.Application{}).Count(&appCount)
+	if appCount > 0 {
 		return nil // 已有数据，跳过种子初始化
+	}
+
+	// 创建默认应用
+	defaultApp := &model.Application{
+		Name:        "默认应用",
+		Code:        "default",
+		SecretKey:   "default-secret-key",
+		Status:      1,
+		Description: "系统默认应用",
+	}
+	if err := db.Create(defaultApp).Error; err != nil {
+		return err
 	}
 
 	// 创建超级管理员角色
 	adminRole := &model.Role{
-		Code: "admin",
-		Name: "超级管理员",
-		Sort: 1,
+		Name:  "超级管理员",
+		AppID: defaultApp.ID,
 	}
 	if err := db.Create(adminRole).Error; err != nil {
 		return err
@@ -95,58 +98,10 @@ func seedData(db *gorm.DB) error {
 
 	// 创建测试角色
 	testRole := &model.Role{
-		Code: "test",
-		Name: "测试角色",
-		Sort: 2,
+		Name:  "测试角色",
+		AppID: defaultApp.ID,
 	}
 	if err := db.Create(testRole).Error; err != nil {
-		return err
-	}
-
-	// 创建菜单
-	menus := []model.Menu{
-		{
-			Name:      "系统管理",
-			Path:      "/system",
-			Component: "Layout",
-			Type:      0, // Directory
-			Sort:      1,
-			Hidden:    false,
-		},
-		{
-			ParentID:  1,
-			Name:      "用户管理",
-			Path:      "/system/user",
-			Component: "system/user/index",
-			Type:      1, // Menu
-			Sort:      1,
-			Hidden:    false,
-		},
-		{
-			ParentID:  1,
-			Name:      "角色管理",
-			Path:      "/system/role",
-			Component: "system/role/index",
-			Type:      1, // Menu
-			Sort:      2,
-			Hidden:    false,
-		},
-		{
-			ParentID:  1,
-			Name:      "菜单管理",
-			Path:      "/system/menu",
-			Component: "system/menu/index",
-			Type:      1, // Menu
-			Sort:      3,
-			Hidden:    false,
-		},
-	}
-	if err := db.Create(&menus).Error; err != nil {
-		return err
-	}
-
-	// 为超级管理员分配菜单
-	if err := db.Model(adminRole).Association("Menus").Append(&menus); err != nil {
 		return err
 	}
 
@@ -160,6 +115,7 @@ func seedData(db *gorm.DB) error {
 		Username: "admin",
 		Password: string(hashedPassword),
 		Status:   1,
+		AppID:    defaultApp.ID,
 	}
 	if err := db.Create(adminUser).Error; err != nil {
 		return err

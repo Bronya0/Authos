@@ -2,6 +2,8 @@ package service
 
 import (
 	"fmt"
+	"strings"
+	"unicode"
 
 	"gorm.io/gorm"
 
@@ -14,6 +16,31 @@ type RoleService struct {
 	CasbinService *CasbinService
 }
 
+// generateRoleCode 根据角色名称生成角色编码
+func generateRoleCode(name string) string {
+	// 将中文字符转换为拼音或直接使用英文字符
+	// 这里简单地将非字母数字字符替换为空格，然后将空格替换为下划线
+	var result strings.Builder
+
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			result.WriteRune(unicode.ToLower(r))
+		} else if unicode.IsSpace(r) {
+			result.WriteRune('_')
+		}
+		// 忽略其他字符
+	}
+
+	code := result.String()
+
+	// 如果生成的编码为空，使用默认值
+	if code == "" {
+		code = "role"
+	}
+
+	return code
+}
+
 // NewRoleService 创建角色服务实例
 func NewRoleService(db *gorm.DB, casbinService *CasbinService) *RoleService {
 	return &RoleService{
@@ -22,17 +49,9 @@ func NewRoleService(db *gorm.DB, casbinService *CasbinService) *RoleService {
 	}
 }
 
-// CreateRole 创建角色
+// CreateRole 创建角色（按应用隔离）
 func (s *RoleService) CreateRole(role *model.Role) error {
-	// 检查角色代码是否已存在
-	var count int64
-	if err := s.DB.Model(&model.Role{}).Where("code = ?", role.Code).Count(&count).Error; err != nil {
-		return fmt.Errorf("failed to check role existence: %w", err)
-	}
-	
-	if count > 0 {
-		return fmt.Errorf("role with code '%s' already exists", role.Code)
-	}
+	// UUID会在BeforeCreate钩子中自动生成，无需手动处理
 
 	if err := s.DB.Create(role).Error; err != nil {
 		return fmt.Errorf("failed to create role: %w", err)
@@ -40,80 +59,86 @@ func (s *RoleService) CreateRole(role *model.Role) error {
 	return nil
 }
 
-// UpdateRole 更新角色
+// UpdateRole 更新角色（按应用隔离）
 func (s *RoleService) UpdateRole(role *model.Role) error {
-	return s.DB.Updates(role).Error
+	return s.DB.Where("id = ? AND app_id = ?", role.ID, role.AppID).Updates(role).Error
 }
 
-// DeleteRole 删除角色
-func (s *RoleService) DeleteRole(id uint) error {
+// DeleteRole 删除角色（按应用隔离）
+func (s *RoleService) DeleteRole(id uint, appID uint) error {
+	// 先获取角色UUID
+	role, err := s.GetRoleByID(id, appID)
+	if err != nil {
+		return fmt.Errorf("failed to get role with ID %d: %w", id, err)
+	}
+
 	// 先删除相关的 Casbin 策略（在事务外）
-	roleKey := fmt.Sprintf("role:%d", id)
-	
+	roleKey := fmt.Sprintf("role:%s", role.UUID)
+
 	// 移除用户-角色关联
 	if err := s.CasbinService.RemoveFilteredPolicy(1, roleKey); err != nil {
-		return fmt.Errorf("failed to remove user-role policies for role %d: %w", id, err)
+		return fmt.Errorf("failed to remove user-role policies for role %s: %w", role.UUID, err)
 	}
 	// 移除角色-权限关联
 	if err := s.CasbinService.RemoveFilteredPolicy(0, roleKey); err != nil {
-		return fmt.Errorf("failed to remove role-permission policies for role %d: %w", id, err)
+		return fmt.Errorf("failed to remove role-permission policies for role %s: %w", role.UUID, err)
 	}
 
 	// 重新加载策略
 	if err := s.CasbinService.LoadPolicy(); err != nil {
-		return fmt.Errorf("failed to reload Casbin policies after deleting role %d: %w", id, err)
+		return fmt.Errorf("failed to reload Casbin policies after deleting role %s: %w", role.UUID, err)
 	}
 
 	// 在事务中删除角色
 	return s.DB.Transaction(func(tx *gorm.DB) error {
 		// 删除角色
-		if err := tx.Delete(&model.Role{}, id).Error; err != nil {
+		if err := tx.Where("id = ? AND app_id = ?", id, appID).Delete(&model.Role{}).Error; err != nil {
 			return fmt.Errorf("failed to delete role with ID %d: %w", id, err)
 		}
 		return nil
 	})
 }
 
-// GetRoleByID 根据ID获取角色
-func (s *RoleService) GetRoleByID(id uint) (*model.Role, error) {
+// GetRoleByID 根据ID获取角色（按应用隔离）
+func (s *RoleService) GetRoleByID(id uint, appID uint) (*model.Role, error) {
 	var role model.Role
-	if err := s.DB.Preload("Menus").First(&role, id).Error; err != nil {
+	if err := s.DB.Preload("Menus").Where("id = ? AND app_id = ?", id, appID).First(&role).Error; err != nil {
 		return nil, err
 	}
 	return &role, nil
 }
 
-// GetRoleByCode 根据Code获取角色
-func (s *RoleService) GetRoleByCode(code string) (*model.Role, error) {
+// GetRoleByUUID 根据UUID获取角色
+func (s *RoleService) GetRoleByUUID(uuid string) (*model.Role, error) {
 	var role model.Role
-	if err := s.DB.Where("code = ?", code).First(&role).Error; err != nil {
+	if err := s.DB.Where("uuid = ?", uuid).First(&role).Error; err != nil {
 		return nil, err
 	}
 	return &role, nil
 }
 
-// ListRoles 列出所有角色
-func (s *RoleService) ListRoles() ([]*model.Role, error) {
+// ListRolesByApp 列出指定应用的所有角色
+func (s *RoleService) ListRolesByApp(appID uint) ([]*model.Role, error) {
 	var roles []*model.Role
-	if err := s.DB.Order("sort asc").Find(&roles).Error; err != nil {
+	if err := s.DB.Where("app_id = ?", appID).Order("id asc").Find(&roles).Error; err != nil {
 		return nil, err
 	}
 	return roles, nil
 }
 
-// AssignMenus 为角色分配菜单
-func (s *RoleService) AssignMenus(roleID uint, menuIDs []uint) error {
+// AssignMenus 为角色分配菜单（按应用隔离）
+func (s *RoleService) AssignMenus(roleID uint, appID uint, menuIDs []uint) error {
 	// 开始事务
 	return s.DB.Transaction(func(tx *gorm.DB) error {
 		// 获取角色
 		var role model.Role
-		if err := tx.First(&role, roleID).Error; err != nil {
+		if err := tx.Where("id = ? AND app_id = ?", roleID, appID).First(&role).Error; err != nil {
 			return err
 		}
 
-		// 获取菜单
+		// 获取菜单（确保属于同一应用）
 		var menus []*model.Menu
-		if err := tx.Where("id IN ?", menuIDs).Find(&menus).Error; err != nil {
+		if err := tx.Where("id IN ? AND app_id = ?", menuIDs, appID).Find(&menus).Error; err != nil {
 			return err
 		}
 
@@ -126,11 +151,26 @@ func (s *RoleService) AssignMenus(roleID uint, menuIDs []uint) error {
 	})
 }
 
-// AssignPermissions 为角色分配 API 权限
-func (s *RoleService) AssignPermissions(roleID uint, permissions []map[string]string) error {
+// GetRoleMenus 获取角色的菜单权限（按应用隔离）
+func (s *RoleService) GetRoleMenus(roleID uint, appID uint) ([]*model.Menu, error) {
+	var role model.Role
+	if err := s.DB.Preload("Menus").Where("id = ? AND app_id = ?", roleID, appID).First(&role).Error; err != nil {
+		return nil, err
+	}
+	return role.Menus, nil
+}
+
+// AssignPermissions 为角色分配 API 权限（按应用隔离）
+func (s *RoleService) AssignPermissions(roleID uint, appID uint, permissions []map[string]string) error {
+	// 先获取角色UUID
+	role, err := s.GetRoleByID(roleID, appID)
+	if err != nil {
+		return fmt.Errorf("failed to get role with ID %d: %w", roleID, err)
+	}
+
 	// 开始事务
 	return s.DB.Transaction(func(tx *gorm.DB) error {
-		roleKey := fmt.Sprintf("role:%d", roleID)
+		roleKey := fmt.Sprintf("role:%s", role.UUID)
 
 		// 先删除该角色的所有权限
 		if err := s.CasbinService.RemoveFilteredPolicy(0, roleKey); err != nil {

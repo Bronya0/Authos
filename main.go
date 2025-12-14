@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"log"
 	"net/http"
 	"time"
@@ -15,11 +14,34 @@ import (
 	"Authos/pkg/utils"
 )
 
+// 跨域中间件配置
+func corsConfig() echo.MiddlewareFunc {
+	return echoMiddleware.CORSWithConfig(echoMiddleware.CORSConfig{
+		AllowOrigins: []string{
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+		},
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodDelete,
+			http.MethodOptions,
+			http.MethodPatch,
+		},
+		AllowHeaders: []string{
+			"Content-Type",
+			"Authorization",
+			"X-Requested-With",
+		},
+		AllowCredentials: true,
+	})
+}
+
 // 预留代码：使用 embed.FS 托管前端构建产物
 // 假设前端构建产物在 web/dist 目录下
 //
-//go:embed web/dist
-var webFS embed.FS
+// var webFS embed.FS
 
 func main() {
 	// 配置信息
@@ -42,14 +64,9 @@ func main() {
 	userService := service.NewUserService(dbService.DB)
 	roleService := service.NewRoleService(dbService.DB, casbinService)
 	menuService := service.NewMenuService(dbService.DB)
-	externalAppService := service.NewExternalAppService(dbService.DB)
 	permissionService := service.NewPermissionService(dbService.DB, casbinService, roleService)
-
-	// 初始化外部应用相关服务
-	externalAppMenuService := service.NewExternalAppMenuService(dbService.DB)
-	externalAppRoleService := service.NewExternalAppRoleService(dbService.DB)
-	externalAppUserService := service.NewExternalAppUserService(dbService.DB)
-	externalAppPermissionService := service.NewExternalAppPermissionService(dbService.DB)
+	apiPermissionService := service.NewApiPermissionService(dbService.DB, casbinService, roleService)
+	applicationService := service.NewApplicationService(dbService.DB)
 
 	// 初始化 JWT 配置
 	jwtConfig := utils.NewJWTConfig(jwtSecret, jwtExpireTime)
@@ -60,21 +77,12 @@ func main() {
 	roleHandler := handler.NewRoleHandler(roleService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	permissionHandler := handler.NewPermissionHandler(permissionService, roleService)
+	apiPermissionHandler := handler.NewApiPermissionHandler(apiPermissionService)
+	applicationHandler := handler.NewApplicationHandler(applicationService)
 	authzHandler := handler.NewAuthzHandler(casbinService, menuService)
-	externalAppHandler := handler.NewExternalAppHandler(externalAppService)
-	externalAPIHandler := handler.NewExternalAPIHandler(externalAppService, menuService, roleService)
-
-	// 初始化外部应用相关处理器
-	externalAppMenuHandler := handler.NewExternalAppMenuHandler(externalAppMenuService)
-	externalAppRoleHandler := handler.NewExternalAppRoleHandler(externalAppRoleService)
-	externalAppUserHandler := handler.NewExternalAppUserHandler(externalAppUserService)
-	externalAppPermissionHandler := handler.NewExternalAppPermissionHandler(externalAppPermissionService)
 
 	// 初始化 JWT 中间件
 	jwtMiddleware := customMiddleware.NewJWTMiddleware(jwtConfig)
-
-	// 初始化外部应用认证中间件
-	externalAppAuthMiddleware := customMiddleware.NewExternalAppAuthMiddleware(externalAppService)
 
 	// 创建 Echo 实例
 	e := echo.New()
@@ -82,21 +90,25 @@ func main() {
 	// 配置中间件
 	e.Use(echoMiddleware.Logger())
 	e.Use(echoMiddleware.Recover())
-	e.Use(echoMiddleware.CORS())
+	e.Use(corsConfig())
 
 	// 静态文件服务 - 托管前端构建产物
-	e.StaticFS("/", webFS)
+	// e.StaticFS("/", webFS)
 
 	// 公共路由
 	public := e.Group("")
 	{
 		// 认证相关
-		public.POST("/login", authHandler.Login)
-		public.POST("/logout", authHandler.Logout)
+		public.POST("/api/v1/login", authHandler.Login)
+		public.POST("/api/v1/logout", authHandler.Logout)
 
-		// 外部应用注册和令牌获取
-		public.POST("/external/register", externalAPIHandler.RegisterApp)
-		public.POST("/external/token", externalAPIHandler.GetAppToken)
+		// 应用相关（不需要认证）
+		public.GET("/applications/:code", applicationHandler.GetApplicationByCode)
+		public.GET("/api/v1/applications", applicationHandler.ListApplications)
+		public.POST("/api/v1/applications", applicationHandler.CreateApplication)
+		public.GET("/api/v1/applications/:id", applicationHandler.GetApplication)
+		public.PUT("/api/v1/applications/:id", applicationHandler.UpdateApplication)
+		public.DELETE("/api/v1/applications/:id", applicationHandler.DeleteApplication)
 	}
 
 	// API 路由 - 需要 JWT 认证
@@ -127,7 +139,9 @@ func main() {
 			roles.GET("/:id", roleHandler.GetRole)
 			roles.PUT("/:id", roleHandler.UpdateRole)
 			roles.DELETE("/:id", roleHandler.DeleteRole)
+			roles.GET("/:id/menus", roleHandler.GetRoleMenus)
 			roles.POST("/:id/menus", roleHandler.AssignMenus)
+			roles.PUT("/:id/menus", roleHandler.UpdateRoleMenus)
 			roles.POST("/:id/permissions", roleHandler.AssignPermissions)
 			roles.PUT("/:id/permissions", roleHandler.UpdatePermissions)
 		}
@@ -141,70 +155,30 @@ func main() {
 			permissions.GET("/roles", permissionHandler.GetPermissionRoles)
 		}
 
+		// 接口权限管理
+		apiPermissions := api.Group("/api-permissions")
+		{
+			apiPermissions.GET("", apiPermissionHandler.ListApiPermissions)
+			apiPermissions.POST("", apiPermissionHandler.CreateApiPermission)
+			apiPermissions.GET("/:id", apiPermissionHandler.GetApiPermission)
+			apiPermissions.PUT("/:id", apiPermissionHandler.UpdateApiPermission)
+			apiPermissions.DELETE("/:id", apiPermissionHandler.DeleteApiPermission)
+			apiPermissions.GET("/roles/:roleUUID", apiPermissionHandler.GetApiPermissionsForRole)
+			apiPermissions.POST("/roles/:roleUUID", apiPermissionHandler.AddApiPermissionToRole)
+			apiPermissions.DELETE("/roles/:roleUUID", apiPermissionHandler.RemoveApiPermissionFromRole)
+		}
+
 		// 菜单管理
 		menus := api.Group("/menus")
 		{
 			menus.POST("", menuHandler.CreateMenu)
 			menus.GET("", menuHandler.ListMenus)
 			menus.GET("/tree", menuHandler.GetMenuTree)
+			menus.GET("/non-system-tree", menuHandler.GetNonSystemMenuTree)
 			menus.GET("/:id", menuHandler.GetMenu)
 			menus.PUT("/:id", menuHandler.UpdateMenu)
 			menus.DELETE("/:id", menuHandler.DeleteMenu)
 		}
-
-		// 外部应用管理
-		externalApps := api.Group("/external/apps")
-		{
-			externalApps.POST("", externalAppHandler.CreateExternalApp)
-			externalApps.GET("", externalAppHandler.ListExternalApps)
-			externalApps.GET("/:id", externalAppHandler.GetExternalApp)
-			externalApps.PUT("/:id", externalAppHandler.UpdateExternalApp)
-			externalApps.DELETE("/:id", externalAppHandler.DeleteExternalApp)
-			externalApps.POST("/:id/token", externalAppHandler.GenerateAppToken)
-
-			// 应用权限管理
-			externalApps.POST("/:id/permissions", externalAppHandler.CreateAppPermission)
-			externalApps.GET("/:id/permissions", externalAppHandler.GetAppPermissions)
-			externalApps.PUT("/permissions/:id", externalAppHandler.UpdateAppPermission)
-			externalApps.DELETE("/permissions/:id", externalAppHandler.DeleteAppPermission)
-		}
-	}
-
-	// 外部API路由 - 需要外部应用认证
-	externalAPI := e.Group("/external/api")
-	externalAPI.Use(externalAppAuthMiddleware.Middleware())
-	{
-		// 菜单管理
-		externalAPI.GET("/menus", externalAppMenuHandler.GetMenus)
-		externalAPI.POST("/menus", externalAppMenuHandler.CreateMenu)
-		externalAPI.PUT("/menus/:id", externalAppMenuHandler.UpdateMenu)
-		externalAPI.DELETE("/menus/:id", externalAppMenuHandler.DeleteMenu)
-
-		// 角色管理
-		externalAPI.GET("/roles", externalAppRoleHandler.GetRoles)
-		externalAPI.POST("/roles", externalAppRoleHandler.CreateRole)
-		externalAPI.PUT("/roles/:id", externalAppRoleHandler.UpdateRole)
-		externalAPI.DELETE("/roles/:id", externalAppRoleHandler.DeleteRole)
-		externalAPI.POST("/roles/:id/menus", externalAppRoleHandler.AssignRoleMenus)
-
-		// 用户管理
-		externalAPI.GET("/users", externalAppUserHandler.GetUsers)
-		externalAPI.GET("/users/:id", externalAppUserHandler.GetUser)
-		externalAPI.POST("/users", externalAppUserHandler.CreateUser)
-		externalAPI.PUT("/users/:id", externalAppUserHandler.UpdateUser)
-		externalAPI.DELETE("/users/:id", externalAppUserHandler.DeleteUser)
-		externalAPI.POST("/users/:id/roles", externalAppUserHandler.AssignUserRoles)
-
-		// 权限管理
-		externalAPI.GET("/permissions", externalAppPermissionHandler.GetPermissions)
-		externalAPI.POST("/permissions", externalAppPermissionHandler.CreatePermission)
-		externalAPI.PUT("/permissions/:id", externalAppPermissionHandler.UpdatePermission)
-		externalAPI.DELETE("/permissions/:id", externalAppPermissionHandler.DeletePermission)
-		externalAPI.POST("/roles/:id/permissions", externalAppPermissionHandler.AssignRolePermissions)
-
-		// 权限检查
-		externalAPI.POST("/check-permission", externalAppPermissionHandler.CheckUserPermission)
-		externalAPI.POST("/check-menu-permission", externalAppPermissionHandler.CheckUserMenuPermission)
 	}
 
 	// 启动服务器

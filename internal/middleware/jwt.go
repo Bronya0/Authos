@@ -26,7 +26,7 @@ func (j *JWTMiddleware) Middleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// 从请求头获取 Authorization
-		authHeader := c.Request().Header.Get("Authorization")
+			authHeader := c.Request().Header.Get("Authorization")
 			if authHeader == "" {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Authorization header is required"})
 			}
@@ -46,6 +46,7 @@ func (j *JWTMiddleware) Middleware() echo.MiddlewareFunc {
 			// 将用户信息存储到上下文
 			c.Set("userID", claims.UserID)
 			c.Set("username", claims.Username)
+			c.Set("appID", claims.AppID) // 添加应用ID到上下文
 
 			return next(c)
 		}

@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -31,14 +30,8 @@ func (h *RoleHandler) CreateRole(c echo.Context) error {
 	}
 
 	// 数据验证
-	if role.Code == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role code is required"})
-	}
 	if role.Name == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role name is required"})
-	}
-	if len(role.Code) > 50 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role code cannot exceed 50 characters"})
 	}
 	if len(role.Name) > 50 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role name cannot exceed 50 characters"})
@@ -47,15 +40,7 @@ func (h *RoleHandler) CreateRole(c echo.Context) error {
 	if err := h.RoleService.CreateRole(&role); err != nil {
 		// 记录详细错误信息
 		log.Printf("Failed to create role: %v", err)
-		
-		// 根据错误类型返回不同的错误信息
-		if strings.Contains(err.Error(), "already exists") {
-			return c.JSON(http.StatusConflict, map[string]string{"message": fmt.Sprintf("Role with code '%s' already exists", role.Code)})
-		}
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return c.JSON(http.StatusConflict, map[string]string{"message": "Role code already exists"})
-		}
-		
+
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to create role: %v", err)})
 	}
 
@@ -97,7 +82,13 @@ func (h *RoleHandler) DeleteRole(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid role ID"})
 	}
 
-	if err := h.RoleService.DeleteRole(uint(id)); err != nil {
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	if err := h.RoleService.DeleteRole(uint(id), appID); err != nil {
 		// Log the actual error for debugging
 		log.Printf("Error deleting role %d: %v", id, err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to delete role: %v", err)})
@@ -114,7 +105,13 @@ func (h *RoleHandler) GetRole(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid role ID"})
 	}
 
-	role, err := h.RoleService.GetRoleByID(uint(id))
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	role, err := h.RoleService.GetRoleByID(uint(id), appID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"message": "Role not found"})
 	}
@@ -124,7 +121,13 @@ func (h *RoleHandler) GetRole(c echo.Context) error {
 
 // ListRoles 列出所有角色
 func (h *RoleHandler) ListRoles(c echo.Context) error {
-	roles, err := h.RoleService.ListRoles()
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	roles, err := h.RoleService.ListRolesByApp(appID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to get roles"})
 	}
@@ -145,16 +148,70 @@ func (h *RoleHandler) AssignMenus(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid role ID"})
 	}
 
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
 	var req AssignMenusRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
 
-	if err := h.RoleService.AssignMenus(uint(id), req.MenuIDs); err != nil {
+	if err := h.RoleService.AssignMenus(uint(id), appID, req.MenuIDs); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to assign menus"})
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Menus assigned successfully"})
+}
+
+// GetRoleMenus 获取角色菜单
+func (h *RoleHandler) GetRoleMenus(c echo.Context) error {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid role ID"})
+	}
+
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	menus, err := h.RoleService.GetRoleMenus(uint(id), appID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to get role menus"})
+	}
+
+	return c.JSON(http.StatusOK, menus)
+}
+
+// UpdateRoleMenus 更新角色菜单
+func (h *RoleHandler) UpdateRoleMenus(c echo.Context) error {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid role ID"})
+	}
+
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	var req AssignMenusRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
+	}
+
+	if err := h.RoleService.AssignMenus(uint(id), appID, req.MenuIDs); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update role menus"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "Role menus updated successfully"})
 }
 
 // AssignPermissionsRequest 分配权限请求
@@ -170,12 +227,18 @@ func (h *RoleHandler) AssignPermissions(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid role ID"})
 	}
 
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
 	var req AssignPermissionsRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
 
-	if err := h.RoleService.AssignPermissions(uint(id), req.Permissions); err != nil {
+	if err := h.RoleService.AssignPermissions(uint(id), appID, req.Permissions); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to assign permissions"})
 	}
 

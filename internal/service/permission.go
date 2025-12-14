@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"Authos/internal/model"
@@ -34,31 +33,45 @@ type Permission struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
-// GetAllPermissions 获取所有权限
-func (s *PermissionService) GetAllPermissions() ([]Permission, error) {
-	// 从Casbin获取所有策略
-	policies, err := s.CasbinService.Enforcer.GetPolicy()
+// GetAllPermissions 获取所有权限（按应用隔离）
+func (s *PermissionService) GetAllPermissions(appID uint) ([]Permission, error) {
+	// 获取应用的所有角色
+	roles, err := s.RoleService.ListRolesByApp(appID)
 	if err != nil {
-		return []Permission{}, err
+		return []Permission{}, fmt.Errorf("failed to get roles for app %d: %w", appID, err)
 	}
 
-	// 确保返回一个非nil的切片
-	permissions := make([]Permission, 0)
-	for _, policy := range policies {
-		if len(policy) >= 3 {
-			// 检查是否是角色权限 (以role:开头)
-			if len(policy[0]) > 5 && policy[0][:5] == "role:" {
-				permissions = append(permissions, Permission{
+	// 收集所有角色的权限
+	var allPermissions []Permission
+	for _, role := range roles {
+		roleKey := fmt.Sprintf("role:%s", role.UUID)
+		policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(0, roleKey)
+
+		for _, policy := range policies {
+			if len(policy) >= 3 {
+				permissions := Permission{
 					Obj:         policy[1],
 					Act:         policy[2],
 					Description: "",         // Casbin不存储描述信息
 					CreatedAt:   time.Now(), // Casbin不记录创建时间，使用当前时间
-				})
+				}
+
+				// 检查权限是否已经存在（避免重复）
+				exists := false
+				for _, p := range allPermissions {
+					if p.Obj == permissions.Obj && p.Act == permissions.Act {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					allPermissions = append(allPermissions, permissions)
+				}
 			}
 		}
 	}
 
-	return permissions, nil
+	return allPermissions, nil
 }
 
 // CreatePermission 创建权限
@@ -112,22 +125,19 @@ func (s *PermissionService) GetRolesForPermission(obj, act string) ([]model.Role
 	// 获取所有拥有此权限的策略
 	policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(1, obj, act)
 
-	var roleIDs []uint
+	var roleUUIDs []string
 	for _, policy := range policies {
 		if len(policy) >= 1 && len(policy[0]) > 5 && policy[0][:5] == "role:" {
-			// 提取角色ID
-			roleIDStr := policy[0][5:]
-			roleID, err := strconv.ParseUint(roleIDStr, 10, 32)
-			if err == nil {
-				roleIDs = append(roleIDs, uint(roleID))
-			}
+			// 提取角色UUID
+			roleUUID := policy[0][5:]
+			roleUUIDs = append(roleUUIDs, roleUUID)
 		}
 	}
 
 	// 查询角色信息
 	var roles []model.Role
-	if len(roleIDs) > 0 {
-		if err := s.DB.Where("id IN ?", roleIDs).Find(&roles).Error; err != nil {
+	if len(roleUUIDs) > 0 {
+		if err := s.DB.Where("uuid IN ?", roleUUIDs).Find(&roles).Error; err != nil {
 			return nil, err
 		}
 	}

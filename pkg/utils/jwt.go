@@ -17,6 +17,7 @@ type JWTConfig struct {
 type JWTClaims struct {
 	UserID   uint   `json:"userId"`
 	Username string `json:"username"`
+	AppID    uint   `json:"appId"` // 应用ID，用于多租户隔离
 	jwt.RegisteredClaims
 }
 
@@ -29,10 +30,11 @@ func NewJWTConfig(secretKey string, expireTime time.Duration) *JWTConfig {
 }
 
 // GenerateToken 生成JWT令牌
-func (j *JWTConfig) GenerateToken(userID uint, username string) (string, error) {
+func (j *JWTConfig) GenerateToken(userID uint, username string, appID uint) (string, error) {
 	claims := JWTClaims{
 		UserID:   userID,
 		Username: username,
+		AppID:    appID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(j.ExpireTime)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

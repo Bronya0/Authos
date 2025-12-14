@@ -16,27 +16,27 @@ func NewMenuService(db *gorm.DB) *MenuService {
 	return &MenuService{DB: db}
 }
 
-// CreateMenu 创建菜单
+// CreateMenu 创建菜单（按应用隔离）
 func (s *MenuService) CreateMenu(menu *model.Menu) error {
 	return s.DB.Create(menu).Error
 }
 
-// UpdateMenu 更新菜单
+// UpdateMenu 更新菜单（按应用隔离）
 func (s *MenuService) UpdateMenu(menu *model.Menu) error {
-	return s.DB.Updates(menu).Error
+	return s.DB.Where("id = ? AND app_id = ?", menu.ID, menu.AppID).Updates(menu).Error
 }
 
-// DeleteMenu 删除菜单
-func (s *MenuService) DeleteMenu(id uint) error {
+// DeleteMenu 删除菜单（按应用隔离）
+func (s *MenuService) DeleteMenu(id uint, appID uint) error {
 	// 开始事务
 	return s.DB.Transaction(func(tx *gorm.DB) error {
 		// 删除菜单
-		if err := tx.Delete(&model.Menu{}, id).Error; err != nil {
+		if err := tx.Where("id = ? AND app_id = ?", id, appID).Delete(&model.Menu{}).Error; err != nil {
 			return err
 		}
 
 		// 删除子菜单
-		if err := tx.Where("parent_id = ?", id).Delete(&model.Menu{}).Error; err != nil {
+		if err := tx.Where("parent_id = ? AND app_id = ?", id, appID).Delete(&model.Menu{}).Error; err != nil {
 			return err
 		}
 
@@ -44,10 +44,10 @@ func (s *MenuService) DeleteMenu(id uint) error {
 	})
 }
 
-// GetMenuByID 根据ID获取菜单
-func (s *MenuService) GetMenuByID(id uint) (*model.Menu, error) {
+// GetMenuByID 根据ID获取菜单（按应用隔离）
+func (s *MenuService) GetMenuByID(id uint, appID uint) (*model.Menu, error) {
 	var menu model.Menu
-	if err := s.DB.First(&menu, id).Error; err != nil {
+	if err := s.DB.Where("id = ? AND app_id = ?", id, appID).First(&menu).Error; err != nil {
 		return nil, err
 	}
 	return &menu, nil
@@ -62,10 +62,40 @@ func (s *MenuService) ListMenus() ([]*model.Menu, error) {
 	return menus, nil
 }
 
-// GetMenuTree 获取菜单树
-func (s *MenuService) GetMenuTree() ([]*model.Menu, error) {
+// ListMenusByApp 列出指定应用的所有菜单（扁平结构）
+func (s *MenuService) ListMenusByApp(appID uint) ([]*model.Menu, error) {
+	var menus []*model.Menu
+	if err := s.DB.Where("app_id = ?", appID).Order("sort asc").Find(&menus).Error; err != nil {
+		return nil, err
+	}
+	return menus, nil
+}
+
+// ListNonSystemMenusByApp 列出指定应用的所有非系统菜单（扁平结构）
+func (s *MenuService) ListNonSystemMenusByApp(appID uint) ([]*model.Menu, error) {
+	var menus []*model.Menu
+	if err := s.DB.Where("app_id = ? AND is_system = ?", appID, false).Order("sort asc").Find(&menus).Error; err != nil {
+		return nil, err
+	}
+	return menus, nil
+}
+
+// GetMenuTreeByApp 获取指定应用的菜单树
+func (s *MenuService) GetMenuTreeByApp(appID uint) ([]*model.Menu, error) {
 	// 获取所有菜单
-	menus, err := s.ListMenus()
+	menus, err := s.ListMenusByApp(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建菜单树
+	return buildMenuTree(menus, 0), nil
+}
+
+// GetNonSystemMenuTreeByApp 获取指定应用的非系统菜单树
+func (s *MenuService) GetNonSystemMenuTreeByApp(appID uint) ([]*model.Menu, error) {
+	// 获取所有非系统菜单
+	menus, err := s.ListNonSystemMenusByApp(appID)
 	if err != nil {
 		return nil, err
 	}

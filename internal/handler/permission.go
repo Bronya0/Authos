@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/labstack/echo/v4"
 	"Authos/internal/service"
+
+	"github.com/labstack/echo/v4"
 )
 
 // PermissionHandler 权限处理器
@@ -24,7 +25,13 @@ func NewPermissionHandler(permissionService *service.PermissionService, roleServ
 
 // ListPermissions 获取权限列表
 func (h *PermissionHandler) ListPermissions(c echo.Context) error {
-	permissions, err := h.PermissionService.GetAllPermissions()
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
+	permissions, err := h.PermissionService.GetAllPermissions(appID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "获取权限列表失败"})
 	}
@@ -92,6 +99,12 @@ func (h *PermissionHandler) AssignPermissionToRole(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "无效的角色ID"})
 	}
 
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
 	var req []struct {
 		Obj string `json:"obj" binding:"required"`
 		Act string `json:"act" binding:"required"`
@@ -110,7 +123,7 @@ func (h *PermissionHandler) AssignPermissionToRole(c echo.Context) error {
 		})
 	}
 
-	if err := h.RoleService.AssignPermissions(uint(roleID), permissions); err != nil {
+	if err := h.RoleService.AssignPermissions(uint(roleID), appID, permissions); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "分配权限失败"})
 	}
 
