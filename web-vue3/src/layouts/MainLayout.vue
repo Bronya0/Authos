@@ -15,54 +15,68 @@
 
     <n-layout>
       <n-layout-header bordered class="layout-header">
-        <div class="header-left">
-          <n-breadcrumb>
-            <n-breadcrumb-item>{{ currentPageTitle }}</n-breadcrumb-item>
-          </n-breadcrumb>
-
-          <!-- 当前应用显示 -->
-          <div v-if="authStore.currentApp" class="current-app-info">
-            <n-tag type="info" size="small">
-              <template #icon>
-                <n-icon>
-                  <apps-icon />
-                </n-icon>
-              </template>
-              {{ authStore.currentApp.name }} ({{ authStore.currentApp.code }})
-            </n-tag>
-            <n-button size="tiny" text @click="handleSwitchApp">
-              切换应用
-            </n-button>
+        <div class="header-content">
+          <div class="header-left">
+            <n-breadcrumb>
+              <n-breadcrumb-item>{{ currentPageTitle }}</n-breadcrumb-item>
+            </n-breadcrumb>
           </div>
-        </div>
 
-        <div class="header-right">
-          <n-space>
-            <n-button quaternary circle @click="handleRefresh">
-              <template #icon>
-                <n-icon>
-                  <RefreshIcon />
-                </n-icon>
-              </template>
-            </n-button>
-
-            <n-button quaternary circle @click="authStore.toggleTheme">
-              <template #icon>
-                <n-icon>
-                  <component :is="authStore.isDark ? SunnyIcon : MoonIcon" />
-                </n-icon>
-              </template>
-            </n-button>
-
-            <n-dropdown trigger="click" :options="userDropdownOptions" @select="handleUserDropdown">
-              <n-button quaternary>
-                <n-space>
-                  <n-icon><person-circle /></n-icon>
-                  <span>{{ displayUsername }}</span>
-                </n-space>
+          <div class="header-center">
+            <!-- 当前应用显示与切换 -->
+            <n-space v-if="authStore.currentApp" :size="8" align="center">
+              <n-tag type="info" size="small">
+                <template #icon>
+                  <n-icon>
+                    <apps-icon />
+                  </n-icon>
+                </template>
+                {{ authStore.currentApp.name }} ({{ authStore.currentApp.code }})
+              </n-tag>
+              <n-button 
+                quaternary 
+                circle 
+                size="small"
+                title="切换应用"
+                @click="handleSwitchApp"
+              >
+                <template #icon>
+                  <n-icon>
+                    <AppsShuffleIcon />
+                  </n-icon>
+                </template>
               </n-button>
-            </n-dropdown>
-          </n-space>
+            </n-space>
+          </div>
+
+          <div class="header-right">
+            <n-space :size="4">
+              <n-button quaternary circle @click="handleRefresh">
+                <template #icon>
+                  <n-icon>
+                    <RefreshIcon />
+                  </n-icon>
+                </template>
+              </n-button>
+
+              <n-button quaternary circle @click="authStore.toggleTheme">
+                <template #icon>
+                  <n-icon>
+                    <component :is="authStore.isDark ? SunnyIcon : MoonIcon" />
+                  </n-icon>
+                </template>
+              </n-button>
+
+              <n-dropdown trigger="click" :options="userDropdownOptions" @select="handleUserDropdown">
+                <n-button quaternary>
+                  <n-space :size="8">
+                    <n-icon><person-circle /></n-icon>
+                    <span>{{ displayUsername }}</span>
+                  </n-space>
+                </n-button>
+              </n-dropdown>
+            </n-space>
+          </div>
         </div>
       </n-layout-header>
 
@@ -87,6 +101,7 @@ import {
   List as ListIcon,
   Key as KeyIcon,
   Apps as AppsIcon,
+  AppsSharp as AppsShuffleIcon,
   PeopleCircle as PeopleCircleIcon,
   Book as BookIcon,
   Refresh as RefreshIcon,
@@ -261,26 +276,30 @@ onMounted(() => {
   height: 64px;
 }
 
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 24px;
+}
+
 .header-left {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.header-center {
   flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 
-  .header-left {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .current-app-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .header-right {
-    display: flex;
-  }
-
+.header-right {
+  flex: 0 0 auto;
+  display: flex;
   align-items: center;
 }
 

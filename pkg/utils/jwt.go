@@ -17,7 +17,8 @@ type JWTConfig struct {
 type JWTClaims struct {
 	UserID   uint   `json:"userId"`
 	Username string `json:"username"`
-	AppID    uint   `json:"appId"` // 应用ID，用于多租户隔离
+	AppID    uint   `json:"appId"`   // 应用数字ID，用于数据库操作
+	AppUUID  string `json:"appUuid"` // 应用UUID，用于对外传输和引用
 	jwt.RegisteredClaims
 }
 
@@ -31,6 +32,7 @@ type SystemJWTClaims struct {
 // AppJWTClaims 应用JWT声明
 type AppJWTClaims struct {
 	AppID   uint   `json:"appId"`
+	AppUUID string `json:"appUuid"`
 	AppCode string `json:"appCode"`
 	jwt.RegisteredClaims
 }
@@ -44,11 +46,12 @@ func NewJWTConfig(secretKey string, expireTime time.Duration) *JWTConfig {
 }
 
 // GenerateToken 生成JWT令牌
-func (j *JWTConfig) GenerateToken(userID uint, username string, appID uint) (string, error) {
+func (j *JWTConfig) GenerateToken(userID uint, username string, appID uint, appUUID string) (string, error) {
 	claims := JWTClaims{
 		UserID:   userID,
 		Username: username,
 		AppID:    appID,
+		AppUUID:  appUUID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(j.ExpireTime)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -77,9 +80,10 @@ func (j *JWTConfig) GenerateSystemToken(username string) (string, error) {
 }
 
 // GenerateAppToken 生成应用JWT令牌
-func (j *JWTConfig) GenerateAppToken(appID uint, appCode string) (string, error) {
+func (j *JWTConfig) GenerateAppToken(appID uint, appUUID, appCode string) (string, error) {
 	claims := AppJWTClaims{
 		AppID:   appID,
+		AppUUID: appUUID,
 		AppCode: appCode,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(j.ExpireTime)),

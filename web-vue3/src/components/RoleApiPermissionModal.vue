@@ -1,25 +1,27 @@
 <template>
-  <n-modal v-model:show="showModal" preset="dialog" title="接口权限分配" style="width: 800px;">
-    <div style="margin-bottom: 16px;">
-      <n-alert type="info" :show-icon="false">
-        为角色【{{ roleName }}】分配接口权限
-      </n-alert>
-    </div>
+  <n-drawer v-model:show="showModal" :width="800" placement="right" @after-leave="resetForm">
+    <n-drawer-content title="接口权限分配" closable>
+      <n-spin :show="loading">
+        <n-data-table 
+          :columns="columns" 
+          :data="apiPermissions" 
+          :row-key="getRowKey"
+          :checked-row-keys="selectedPermissionIds" 
+          @update:checked-row-keys="handleCheck" 
+          :pagination="pagination" 
+        />
+      </n-spin>
 
-    <n-spin :show="loading">
-      <n-data-table :columns="columns" :data="apiPermissions" :row-key="getRowKey"
-        :checked-row-keys="selectedPermissionIds" @update:checked-row-keys="handleCheck" :pagination="pagination" />
-    </n-spin>
-
-    <template #action>
-      <n-space>
-        <n-button @click="showModal = false">取消</n-button>
-        <n-button type="primary" :loading="saving" @click="handleSave">
-          保存
-        </n-button>
-      </n-space>
-    </template>
-  </n-modal>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showModal = false">取消</n-button>
+          <n-button type="primary" :loading="saving" @click="handleSave">
+            保存
+          </n-button>
+        </n-space>
+      </template>
+    </n-drawer-content>
+  </n-drawer>
 </template>
 
 <script setup>
@@ -47,7 +49,7 @@ const emit = defineEmits(['update:visible', 'saved'])
 
 const appStore = useAppStore()
 
-const showModal = ref(props.visible)
+const showModal = ref(false)
 const loading = ref(false)
 const saving = ref(false)
 const apiPermissions = ref([])
@@ -62,7 +64,7 @@ watch(() => props.visible, (val) => {
   }
 })
 
-// 监 showModal变化，同步到父组件
+// 监听showModal变化，同步到父组件
 watch(showModal, (val) => {
   emit('update:visible', val)
 })
@@ -184,5 +186,9 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
+}
+
+const resetForm = () => {
+  selectedPermissionIds.value = []
 }
 </script>

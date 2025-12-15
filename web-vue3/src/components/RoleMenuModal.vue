@@ -1,26 +1,34 @@
 <template>
-  <n-modal v-model:show="showModal" preset="dialog" title="菜单权限分配" style="width: 600px;">
-    <div style="margin-bottom: 16px;">
-      <n-alert type="info" :show-icon="false">
-        为角色【{{ roleName }}】分配菜单权限
-      </n-alert>
-    </div>
+  <n-drawer v-model:show="showModal" :width="500" placement="right" @after-leave="resetForm">
+    <n-drawer-content title="菜单权限分配" closable>
+      <n-spin :show="loading">
+        <n-tree 
+          :data="menuTree" 
+          :checked-keys="selectedMenuIds" 
+          :on-update:checked-keys="handleCheck"
+          :expand-on-click="true" 
+          :selectable="false" 
+          :checkable="true" 
+          :show-line="true" 
+          :indent="20" 
+          :cascade="true"
+          block-line 
+          key-field="ID" 
+          label-field="name" 
+          children-field="children" 
+        />
+      </n-spin>
 
-    <n-spin :show="loading">
-      <n-tree :data="menuTree" :checked-keys="selectedMenuIds" :on-update:checked-keys="handleCheck"
-        :expand-on-click="true" :selectable="false" :checkable="true" :show-line="true" :indent="20" :cascade="true"
-        block-line key-field="ID" label-field="name" children-field="children" />
-    </n-spin>
-
-    <template #action>
-      <n-space>
-        <n-button @click="showModal = false">取消</n-button>
-        <n-button type="primary" :loading="saving" @click="handleSave">
-          保存
-        </n-button>
-      </n-space>
-    </template>
-  </n-modal>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showModal = false">取消</n-button>
+          <n-button type="primary" :loading="saving" @click="handleSave">
+            保存
+          </n-button>
+        </n-space>
+      </template>
+    </n-drawer-content>
+  </n-drawer>
 </template>
 
 <script setup>
@@ -69,12 +77,11 @@ const transformMenuData = (data) => {
   }))
 }
 
-const showModal = ref(props.visible)
+const showModal = ref(false)
 const loading = ref(false)
 const saving = ref(false)
 const menuTree = ref([])
 const selectedMenuIds = ref([])
-const allMenuIds = ref([])
 
 // 监听visible变化
 watch(() => props.visible, (val) => {
@@ -85,7 +92,7 @@ watch(() => props.visible, (val) => {
   }
 })
 
-// 监 showModal变化，同步到父组件
+// 监听showModal变化，同步到父组件
 watch(showModal, (val) => {
   emit('update:visible', val)
 })
@@ -96,17 +103,6 @@ const loadMenus = async () => {
   try {
     const data = await menuAPI.getMenuTree()
     menuTree.value = transformMenuData(data || [])
-
-    // 收集所有菜单ID
-    const collectIds = (menus) => {
-      menus.forEach(menu => {
-        allMenuIds.value.push(menu.ID)
-        if (menu.children && menu.children.length > 0) {
-          collectIds(menu.children)
-        }
-      })
-    }
-    collectIds(menuTree.value)
   } catch (error) {
     appStore.showError('加载菜单列表失败')
   } finally {
@@ -145,5 +141,9 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
+}
+
+const resetForm = () => {
+  selectedMenuIds.value = []
 }
 </script>

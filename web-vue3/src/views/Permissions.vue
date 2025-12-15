@@ -27,16 +27,12 @@
           <n-input v-model:value="form.name" placeholder="请输入权限名称" />
         </n-form-item>
 
-        <n-form-item label="编码" path="code">
-          <n-input v-model:value="form.code" placeholder="请输入权限编码" />
+        <n-form-item label="路径" path="path">
+          <n-input v-model:value="form.path" placeholder="请输入API路径，如/api/v1/users" />
         </n-form-item>
 
-        <n-form-item label="资源" path="resource">
-          <n-input v-model:value="form.resource" placeholder="请输入资源路径" />
-        </n-form-item>
-
-        <n-form-item label="动作" path="action">
-          <n-select v-model:value="form.action" placeholder="请选择动作" :options="actionOptions" />
+        <n-form-item label="方法" path="method">
+          <n-select v-model:value="form.method" placeholder="请选择HTTP方法" :options="methodOptions" />
         </n-form-item>
 
         <n-form-item label="描述" path="description">
@@ -58,7 +54,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, h } from 'vue'
-import { permissionAPI } from '../api'
+import { apiPermissionAPI } from '../api'
 import { useAppStore } from '../stores/app'
 import { Key, Add, Create, Trash } from '@vicons/ionicons5'
 import { NIcon, NButton, NSpace } from 'naive-ui'
@@ -75,9 +71,8 @@ const currentPermissionId = ref(null)
 const formRef = ref()
 const form = reactive({
   name: '',
-  code: '',
-  resource: '',
-  action: '',
+  path: '',
+  method: '',
   description: ''
 })
 
@@ -85,14 +80,11 @@ const rules = {
   name: [
     { required: true, message: '请输入权限名称', trigger: 'blur' }
   ],
-  code: [
-    { required: true, message: '请输入权限编码', trigger: 'blur' }
+  path: [
+    { required: true, message: '请输入API路径', trigger: 'blur' }
   ],
-  resource: [
-    { required: true, message: '请输入资源路径', trigger: 'blur' }
-  ],
-  action: [
-    { required: true, message: '请选择动作', trigger: 'change' }
+  method: [
+    { required: true, message: '请选择HTTP方法', trigger: 'change' }
   ]
 }
 
@@ -101,6 +93,14 @@ const actionOptions = [
   { label: 'POST', value: 'POST' },
   { label: 'PUT', value: 'PUT' },
   { label: 'DELETE', value: 'DELETE' }
+]
+
+const methodOptions = [
+  { label: 'GET', value: 'GET' },
+  { label: 'POST', value: 'POST' },
+  { label: 'PUT', value: 'PUT' },
+  { label: 'DELETE', value: 'DELETE' },
+  { label: 'PATCH', value: 'PATCH' }
 ]
 
 const showAddModal = computed({
@@ -127,17 +127,13 @@ const columns = [
     key: 'name'
   },
   {
-    title: '编码',
-    key: 'code'
+    title: '路径',
+    key: 'path'
   },
   {
-    title: '资源',
-    key: 'resource'
-  },
-  {
-    title: '动作',
-    key: 'action',
-    width: 100
+    title: '方法',
+    key: 'method',
+    width: 80
   },
   {
     title: '描述',
@@ -196,7 +192,7 @@ const pagination = {
 const loadPermissions = async () => {
   loading.value = true
   try {
-    const data = await permissionAPI.getPermissions()
+    const data = await apiPermissionAPI.getApiPermissions()
     // 确保数据是数组格式，处理null和undefined的情况
     if (data && Array.isArray(data)) {
       permissions.value = data
@@ -223,9 +219,8 @@ const handleEdit = (row) => {
 
   // 填充表单数据
   form.name = row.name
-  form.code = row.code
-  form.resource = row.resource
-  form.action = row.action
+  form.path = row.path
+  form.method = row.method
   form.description = row.description || ''
 
   showModal.value = true
@@ -238,17 +233,16 @@ const handleSave = async () => {
 
     const data = {
       name: form.name,
-      code: form.code,
-      resource: form.resource,
-      action: form.action,
+      path: form.path,
+      method: form.method,
       description: form.description
     }
 
     if (isEdit.value) {
-      await permissionAPI.updatePermission(currentPermissionId.value, data)
+      await apiPermissionAPI.updateApiPermission(currentPermissionId.value, data)
       appStore.showSuccess('权限更新成功')
     } else {
-      await permissionAPI.createPermission(data)
+      await apiPermissionAPI.createApiPermission(data)
       appStore.showSuccess('权限创建成功')
     }
 
@@ -264,7 +258,7 @@ const handleSave = async () => {
 const handleDelete = async (row) => {
   try {
     const id = row.id || row.ID
-    await permissionAPI.deletePermission(id)
+    await apiPermissionAPI.deleteApiPermission(id)
     appStore.showSuccess('权限删除成功')
     loadPermissions()
   } catch (error) {
@@ -274,9 +268,8 @@ const handleDelete = async (row) => {
 
 const resetForm = () => {
   form.name = ''
-  form.code = ''
-  form.resource = ''
-  form.action = ''
+  form.path = ''
+  form.method = ''
   form.description = ''
   isEdit.value = false
   currentPermissionId.value = null

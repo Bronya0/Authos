@@ -3,7 +3,9 @@ package service
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"golang.org/x/crypto/bcrypt"
@@ -105,8 +107,9 @@ func seedData(db *gorm.DB) error {
 		return err
 	}
 
-	// 创建超级管理员用户
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+	// 创建超级管理员用户，生成复杂度较高的密码
+	adminPassword := generateSecurePassword()
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -121,10 +124,54 @@ func seedData(db *gorm.DB) error {
 		return err
 	}
 
+	// 打印初始管理员密码到日志
+	log.Printf("========================================")
+	log.Printf("初始管理员账户已创建")
+	log.Printf("用户名: admin")
+	log.Printf("密码: %s", adminPassword)
+	log.Printf("========================================")
+
 	// 为超级管理员用户分配角色
 	if err := db.Model(adminUser).Association("Roles").Append(adminRole); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// generateSecurePassword 生成一个复杂度较高的密码
+func generateSecurePassword() string {
+	rand.Seed(time.Now().UnixNano())
+
+	// 定义密码字符集
+	upperLetters := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	lowerLetters := "abcdefghijklmnopqrstuvwxyz"
+	digits := "0123456789"
+	specialChars := "!@#$%^&*()-_=+[]{}|;:,.<>?"
+
+	// 密码长度 16 位
+	length := 16
+
+	// 确保包含各种字符类型
+	password := make([]byte, length)
+
+	// 随机选择各类字符
+	password[0] = upperLetters[rand.Intn(len(upperLetters))]
+	password[1] = lowerLetters[rand.Intn(len(lowerLetters))]
+	password[2] = digits[rand.Intn(len(digits))]
+	password[3] = specialChars[rand.Intn(len(specialChars))]
+
+	// 剩余的位置随机填充
+	allChars := upperLetters + lowerLetters + digits + specialChars
+	for i := 4; i < length; i++ {
+		password[i] = allChars[rand.Intn(len(allChars))]
+	}
+
+	// 打乱密码顺序
+	for i := len(password) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		password[i], password[j] = password[j], password[i]
+	}
+
+	return string(password)
 }

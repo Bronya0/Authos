@@ -1,57 +1,77 @@
 <template>
   <div class="login-container">
-    <n-card class="login-card" title="Authos 权限管理系统">
-      <template #header-extra>
-        <n-tag type="info" size="small">系统管理员登录</n-tag>
-      </template>
-
-      <n-form ref="formRef" :model="loginForm" :rules="loginRules">
-        <n-form-item path="username" label="管理员账号">
-          <n-input v-model:value="loginForm.username" placeholder="请输入系统管理员账号" size="large" clearable>
-            <template #prefix>
-              <n-icon>
-                <person />
-              </n-icon>
-            </template>
-          </n-input>
-        </n-form-item>
-
-        <n-form-item path="password" label="管理员密码">
-          <n-input v-model:value="loginForm.password" type="password" placeholder="请输入系统管理员密码" size="large"
-            show-password-on="click" clearable>
-            <template #prefix><n-icon><lock-closed /></n-icon></template>
-          </n-input>
-        </n-form-item>
-
-        <div class="form-actions">
-          <n-button type="primary" size="large" :loading="loading" @click="handleLogin" block>
-            登录系统
-          </n-button>
-        </div>
-      </n-form>
-
-      <n-divider class="my-4">系统说明</n-divider>
-
-      <div class="system-info">
-        <n-alert type="info" title="内置管理员账号" :show-icon="false">
-          <div class="admin-info">
-            <p>默认账号: admin</p>
-            <p>默认密码: admin123</p>
+    <div class="background-animation"></div>
+    <div class="floating-shapes">
+      <div class="shape shape-1"></div>
+      <div class="shape shape-2"></div>
+      <div class="shape shape-3"></div>
+    </div>
+    
+    <div class="login-content">
+      <div class="login-header">
+        <div class="logo-container">
+          <div class="logo">
+            <n-icon size="48" color="#fff">
+              <shield-checkmark />
+            </n-icon>
           </div>
-        </n-alert>
-
-        <n-alert type="warning" title="安全提示" class="mt-4">
-          系统管理员登录后，您可以选择或创建应用，然后使用应用 ID 和密钥进行应用级登录。
-        </n-alert>
+          <h1 class="system-title">Authos</h1>
+          <p class="system-subtitle">统一权限管理系统</p>
+        </div>
       </div>
-    </n-card>
+      
+      <n-card class="login-card">
+        <template #header>
+          <div class="card-header">
+            <h2>系统管理员登录</h2>
+            <n-tag type="info" size="small" round>安全登录</n-tag>
+          </div>
+        </template>
+
+        <n-form ref="formRef" :model="loginForm" :rules="loginRules" size="large">
+          <n-form-item path="username">
+            <n-input v-model:value="loginForm.username" placeholder="请输入系统管理员账号" clearable>
+              <template #prefix>
+                <n-icon color="#666">
+                  <person />
+                </n-icon>
+              </template>
+            </n-input>
+          </n-form-item>
+
+          <n-form-item path="password">
+            <n-input v-model:value="loginForm.password" type="password" placeholder="请输入系统管理员密码"
+              show-password-on="click" clearable>
+              <template #prefix>
+                <n-icon color="#666">
+                  <lock-closed />
+                </n-icon>
+              </template>
+            </n-input>
+          </n-form-item>
+
+          <div class="form-actions">
+            <n-button type="primary" size="large" :loading="loading" @click="handleLogin" block>
+              <template #icon>
+                <n-icon><log-in /></n-icon>
+              </template>
+              登录系统
+            </n-button>
+          </div>
+        </n-form>
+      </n-card>
+      
+      <div class="login-footer">
+        <p>© 2024 Authos. 保留所有权利.</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { Person, LockClosed } from '@vicons/ionicons5'
+import { Person, LockClosed, ShieldCheckmark, LogIn } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/auth'
 import { authAPI } from '../api'
 
@@ -128,45 +148,167 @@ const handleLogin = async () => {
 
 <style scoped>
 .login-container {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #1890ff, #096dd9);
+  overflow: hidden;
+}
+
+.background-animation {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  z-index: -2;
+}
+
+.floating-shapes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.shape {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.1;
+  background: #fff;
+}
+
+.shape-1 {
+  width: 300px;
+  height: 300px;
+  top: -150px;
+  right: -100px;
+  animation: float 15s infinite ease-in-out;
+}
+
+.shape-2 {
+  width: 200px;
+  height: 200px;
+  bottom: -100px;
+  left: -50px;
+  animation: float 20s infinite ease-in-out reverse;
+}
+
+.shape-3 {
+  width: 150px;
+  height: 150px;
+  top: 50%;
+  left: 10%;
+  animation: float 25s infinite ease-in-out;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(10deg);
+  }
+}
+
+.login-content {
+  width: 100%;
+  max-width: 450px;
+  padding: 20px;
+  z-index: 1;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.logo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logo {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.system-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 8px 0;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.system-subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  font-weight: 300;
 }
 
 .login-card {
-  width: 100%;
-  max-width: 500px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.login-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
 }
 
 .form-actions {
-  margin-top: 24px;
+  margin-top: 32px;
 }
 
-.system-info {
-  margin-top: 16px;
+.login-footer {
+  text-align: center;
+  margin-top: 32px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
 }
 
-.admin-info {
-  display: flex;
-  justify-content: space-between;
-}
-
-.admin-info p {
-  margin: 0;
-  font-family: monospace;
-  background: rgba(0, 0, 0, 0.05);
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.my-4 {
-  margin: 16px 0;
-}
-
-.mt-4 {
-  margin-top: 16px;
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .login-content {
+    padding: 16px;
+  }
+  
+  .system-title {
+    font-size: 28px;
+  }
+  
+  .system-subtitle {
+    font-size: 14px;
+  }
 }
 </style>

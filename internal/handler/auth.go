@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 
+	"Authos/internal/model"
 	"Authos/internal/service"
 	"Authos/pkg/utils"
 )
@@ -77,38 +78,57 @@ func (h *AuthHandler) SystemLogin(c echo.Context) error {
 	}
 
 	// 添加调试日志
-	fmt.Printf("SystemLogin attempt: username=%s, password=%s\n", req.Username, req.Password)
+	fmt.Printf("SystemLogin attempt: username=%s\n", req.Username)
 
-	// 验证系统管理员账号（硬编码的内置管理员）
-	// 注意：此处使用硬编码密码仅用于开发/测试环境，生产环境应使用数据库存储或配置文件
-	if req.Username != "admin" || req.Password != "admin123" {
+	// 查询系统管理员账号（username为admin）
+	// 系统管理员不与特定应用关联，appID为1（系统默认应用）
+	user, err := h.UserService.GetUserByUsernameForSystem(req.Username)
+	if err != nil {
+		fmt.Printf("SystemLogin: user not found or not admin: %v\n", err)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid admin credentials"})
 	}
 
-	// 生成系统管理员JWT令牌
-	token, err := h.JWTConfig.GenerateSystemToken(req.Username)
+	// 验证密码
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		fmt.Printf("SystemLogin: password mismatch\n")
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid admin credentials"})
+	}
+
+	// 获取应用信息（使用user的AppID）
+	var app model.Application
+	if err := h.UserService.DB.First(&app, user.AppID).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Application not found"})
+	}
+
+	// 生成系统管理员JWT令牌（包含应用信息）
+	token, err := h.JWTConfig.GenerateToken(user.ID, user.Username, app.ID, app.UUID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"token":   token,
-		"user":    map[string]interface{}{"username": req.Username},
+		"user":    user,
+		"app":     app,
 		"message": "System login successful",
 	})
 }
 
 // AppLogin 应用登录接口
 func (h *AuthHandler) AppLogin(c echo.Context) error {
-	var req AppLoginRequest
+	var req struct {
+		AppUUID   string `json:"appUuid" binding:"required"` // 使用UUID而不是AppID
+		AppSecret string `json:"appSecret" binding:"required"`
+	}
+
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
 
-	// 获取应用信息
-	app, err := h.ApplicationService.GetApplicationByID(fmt.Sprintf("%d", req.AppID))
+	// 获取应用信息（通过UUID）
+	app, err := h.ApplicationService.GetApplicationByUUID(req.AppUUID)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application ID"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application UUID"})
 	}
 
 	// 检查应用密钥
@@ -122,7 +142,7 @@ func (h *AuthHandler) AppLogin(c echo.Context) error {
 	}
 
 	// 生成应用JWT令牌
-	token, err := h.JWTConfig.GenerateAppToken(app.ID, app.Code)
+	token, err := h.JWTConfig.GenerateAppToken(app.ID, app.UUID, app.Code)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
@@ -168,8 +188,8 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid username or password"})
 	}
 
-	// 生成JWT令牌（包含应用ID）
-	token, err := h.JWTConfig.GenerateToken(user.ID, user.Username, app.ID)
+	// 生成JWT令牌（包含应用ID和UUID）
+	token, err := h.JWTConfig.GenerateToken(user.ID, user.Username, app.ID, app.UUID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}

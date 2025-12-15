@@ -67,7 +67,6 @@ func main() {
 	userService := service.NewUserService(dbService.DB)
 	roleService := service.NewRoleService(dbService.DB, casbinService)
 	menuService := service.NewMenuService(dbService.DB)
-	permissionService := service.NewPermissionService(dbService.DB, casbinService, roleService)
 	apiPermissionService := service.NewApiPermissionService(dbService.DB, casbinService, roleService)
 	applicationService := service.NewApplicationService(dbService.DB)
 
@@ -79,7 +78,6 @@ func main() {
 	userHandler := handler.NewUserHandler(userService)
 	roleHandler := handler.NewRoleHandler(roleService)
 	menuHandler := handler.NewMenuHandler(menuService)
-	permissionHandler := handler.NewPermissionHandler(permissionService, roleService)
 	apiPermissionHandler := handler.NewApiPermissionHandler(apiPermissionService)
 	applicationHandler := handler.NewApplicationHandler(applicationService)
 	authzHandler := handler.NewAuthzHandler(casbinService, menuService)
@@ -159,15 +157,6 @@ func main() {
 			roles.PUT("/:id/menus", roleHandler.UpdateRoleMenus)
 			roles.POST("/:id/permissions", roleHandler.AssignPermissions)
 			roles.PUT("/:id/permissions", roleHandler.UpdatePermissions)
-		}
-
-		// 权限管理
-		permissions := api.Group("/permissions")
-		{
-			permissions.GET("", permissionHandler.ListPermissions)
-			permissions.POST("", permissionHandler.CreatePermission)
-			permissions.DELETE("", permissionHandler.DeletePermission)
-			permissions.GET("/roles", permissionHandler.GetPermissionRoles)
 		}
 
 		// 接口权限管理

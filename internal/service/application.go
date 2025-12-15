@@ -131,6 +131,15 @@ func (s *ApplicationService) GetApplicationByID(id string) (*model.Application, 
 	return &app, nil
 }
 
+// GetApplicationByUUID 根据UUID获取应用
+func (s *ApplicationService) GetApplicationByUUID(uuid string) (*model.Application, error) {
+	var app model.Application
+	if err := s.DB.Where("uuid = ?", uuid).First(&app).Error; err != nil {
+		return nil, err
+	}
+	return &app, nil
+}
+
 // GetApplicationByIDWithoutSecret 根据ID获取应用（不包含密钥）
 func (s *ApplicationService) GetApplicationByIDWithoutSecret(id string) (*model.Application, error) {
 	app, err := s.GetApplicationByID(id)

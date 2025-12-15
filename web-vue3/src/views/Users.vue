@@ -302,3 +302,20 @@ onMounted(() => {
   loadRoles()
 })
 </script>
+
+<style scoped>
+/* 确保输入框在亮色和暗色主题下都有良好的对比度 */
+:deep(.n-input__input),
+:deep(.n-input-group__input) {
+  background-color: var(--n-color);
+  color: var(--n-text-color);
+}
+
+:deep(.n-input__input::placeholder) {
+  color: var(--n-placeholder-color);
+}
+
+:deep(.n-select) {
+  background-color: var(--n-color);
+}
+</style>

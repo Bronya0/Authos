@@ -143,6 +143,22 @@ func (s *UserService) GetUserByUsername(username string, appID uint) (*model.Use
 	return &user, nil
 }
 
+// GetUserByUsernameForSystem 获取系统管理员账号（用于系统登录）
+func (s *UserService) GetUserByUsernameForSystem(username string) (*model.User, error) {
+	var user model.User
+	// 系统管理员固定为默认应用中的admin用户
+	if err := s.DB.Preload("Roles").Where("username = ?", username).First(&user).Error; err != nil {
+		return nil, err
+	}
+
+	// 填充 RoleIDs
+	for _, role := range user.Roles {
+		user.RoleIDs = append(user.RoleIDs, role.ID)
+	}
+
+	return &user, nil
+}
+
 // ListUsersByApp 列出指定应用的所有用户
 func (s *UserService) ListUsersByApp(appID uint) ([]*model.User, error) {
 	var users []*model.User

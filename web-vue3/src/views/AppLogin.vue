@@ -1,57 +1,92 @@
 <template>
   <div class="app-login-container">
-    <n-card class="app-login-card" title="应用登录">
-      <template #header-extra>
-        <n-button text @click="backToAppSelection">
+    <div class="background-animation"></div>
+    <div class="floating-shapes">
+      <div class="shape shape-1"></div>
+      <div class="shape shape-2"></div>
+      <div class="shape shape-3"></div>
+    </div>
+    
+    <div class="login-content">
+      <div class="login-header">
+        <n-button text @click="backToAppSelection" class="back-button">
           <template #icon>
-            <n-icon><arrow-back /></n-icon>
+            <n-icon size="20"><arrow-back /></n-icon>
           </template>
           返回应用选择
         </n-button>
-      </template>
-
+      </div>
+      
       <div v-if="selectedApp" class="selected-app-info">
-        <n-card size="small" :bordered="false">
-          <template #header>
-            <span>当前应用</span>
-          </template>
-          <div class="app-details">
-            <div class="app-name">{{ selectedApp.name }}</div>
-            <div class="app-code">应用代码: {{ selectedApp.code }}</div>
-            <div class="app-id">应用ID: {{ selectedApp.id }}</div>
+        <div class="app-card">
+          <div class="app-header">
+            <div class="app-icon">
+              <n-icon size="48" :color="getAppColor()">
+                <apps />
+              </n-icon>
+            </div>
+            <div class="app-details">
+              <h2>{{ selectedApp.name }}</h2>
+              <p>{{ selectedApp.code }}</p>
+            </div>
           </div>
-        </n-card>
+          <div class="app-status">
+            <n-tag type="info" size="large" :bordered="false">
+              <template #icon>
+                <n-icon><checkmark-circle /></n-icon>
+              </template>
+              已选择应用
+            </n-tag>
+          </div>
+        </div>
       </div>
 
-      <n-form ref="formRef" :model="loginForm" :rules="loginRules" class="login-form">
-        <n-form-item path="appId" label="应用ID">
-          <n-input v-model:value="loginForm.appId" placeholder="请输入应用ID" size="large" clearable>
-            <template #prefix>
-              <n-icon>
-                <key />
-              </n-icon>
-            </template>
-          </n-input>
-        </n-form-item>
+      <n-card class="login-card">
+        <template #header>
+          <div class="card-header">
+            <h2>应用登录</h2>
+            <n-tag type="success" size="small" round>安全验证</n-tag>
+          </div>
+        </template>
 
-        <n-form-item path="appSecret" label="应用密钥">
-          <n-input v-model:value="loginForm.appSecret" type="password" placeholder="请输入应用密钥" size="large"
-            show-password-on="click" clearable>
-            <template #prefix><n-icon><lock-closed /></n-icon></template>
-          </n-input>
-        </n-form-item>
+        <n-form ref="formRef" :model="loginForm" :rules="loginRules" size="large">
+          <n-form-item path="appUuid">
+            <n-input v-model:value="loginForm.appUuid" placeholder="请输入应用标识符" clearable>
+              <template #prefix>
+                <n-icon color="#666">
+                  <key />
+                </n-icon>
+              </template>
+            </n-input>
+          </n-form-item>
 
-        <div class="form-actions">
-          <n-button type="primary" size="large" :loading="loading" @click="handleLogin" block>
-            登录应用
-          </n-button>
-        </div>
-      </n-form>
+          <n-form-item path="appSecret">
+            <n-input v-model:value="loginForm.appSecret" type="password" placeholder="请输入应用密钥"
+              show-password-on="click" clearable>
+              <template #prefix>
+                <n-icon color="#666">
+                  <lock-closed />
+                </n-icon>
+              </template>
+            </n-input>
+          </n-form-item>
 
-      <n-divider class="my-4">应用管理</n-divider>
-
-      <div class="app-actions">
-        <n-button type="error" @click="handleDeleteApp" block :disabled="!selectedApp">
+          <div class="form-actions">
+            <n-button type="primary" size="large" :loading="loading" @click="handleLogin" block>
+              <template #icon>
+                <n-icon><log-in /></n-icon>
+              </template>
+              登录应用
+            </n-button>
+          </div>
+        </n-form>
+      </n-card>
+      
+      <div class="danger-zone">
+        <n-divider>
+          <span class="danger-text">危险操作</span>
+        </n-divider>
+        <n-button type="error" @click="handleDeleteApp" block :disabled="!selectedApp" class="delete-btn">
           <template #icon>
             <n-icon>
               <trash-outline />
@@ -60,7 +95,7 @@
           删除当前应用
         </n-button>
       </div>
-    </n-card>
+    </div>
   </div>
 </template>
 
@@ -68,9 +103,17 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NCard, NButton, NIcon, NForm, NFormItem, NInput, NDivider
+  NCard, NButton, NIcon, NForm, NFormItem, NInput, NDivider, NTag
 } from 'naive-ui'
-import { ArrowBack, Key, LockClosed, TrashOutline } from '@vicons/ionicons5'
+import {
+  ArrowBack,
+  Key,
+  LockClosed,
+  TrashOutline,
+  CheckmarkCircle,
+  LogIn,
+  Apps
+} from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/auth'
 import { useAppStore } from '../stores/app'
 import { authAPI, applicationAPI } from '../api'
@@ -88,27 +131,28 @@ const selectedApp = ref(null)
 
 // 登录表单
 const loginForm = reactive({
-  appId: '',
+  appUuid: '',
   appSecret: ''
 })
 
+// 获取应用颜色
+const getAppColor = () => {
+  const colors = ['#667eea', '#f56565', '#48bb78', '#ed8936', '#9f7aea', '#38b2ac', '#ed64a6']
+  const index = selectedApp.value?.id ? selectedApp.value.id.toString().charCodeAt(0) % colors.length : 0
+  return colors[index]
+}
+
 // 登录表单验证规则
 const loginRules = {
-  appId: [
+  appUuid: [
     {
       required: true,
       validator: (rule, value) => {
-        // 处理数字类型的应用ID
         if (value === null || value === undefined || value === '') {
-          return new Error('请输入应用ID')
+          return new Error('请输入应用标识符')
         }
-        // 如果是数字，转换为字符串再检查
-        if (typeof value === 'number') {
-          return value > 0 ? true : new Error('请输入有效的应用ID')
-        }
-        // 如果是字符串，检查是否为空
         if (typeof value === 'string') {
-          return value.trim() !== '' ? true : new Error('请输入应用ID')
+          return value.trim() !== '' ? true : new Error('请输入应用标识符')
         }
         return true
       },
@@ -127,15 +171,9 @@ const handleLogin = async () => {
     loading.value = true
 
     try {
-      // 准备登录参数，确保参数类型正确
-      // 处理数字和字符串类型的应用ID
-      let appIdValue = loginForm.appId
-      if (typeof appIdValue === 'string') {
-        appIdValue = parseInt(appIdValue.trim())
-      }
-
+      // 准备登录参数，使用UUID
       const loginParams = {
-        appId: appIdValue,
+        appUuid: loginForm.appUuid.trim(),
         appSecret: loginForm.appSecret.trim()
       }
 
@@ -253,77 +291,227 @@ onMounted(() => {
     console.log('从 appStore 加载应用信息:', appStore.currentApp)
   }
 
-  // 自动填入应用ID
+  // 自动填入应用UUID，但不直接显示在UI上
   if (selectedApp.value) {
-    // 确保应用ID是字符串类型，以便在表单中正确显示和编辑
-    const appId = selectedApp.value.id || selectedApp.value.uuid || ''
-    loginForm.appId = typeof appId === 'number' ? appId.toString() : appId
-    console.log('设置应用ID:', loginForm.appId, '类型:', typeof loginForm.appId)
+    // 确保应用UUID是字符串类型，但不直接显示在UI上
+    const appUuid = selectedApp.value.uuid || selectedApp.value.UUID || selectedApp.value.id || ''
+    loginForm.appUuid = typeof appUuid === 'number' ? appUuid.toString() : appUuid
+    console.log('设置应用UUID:', loginForm.appUuid, '类型:', typeof loginForm.appUuid)
   }
 })
 </script>
 
 <style scoped>
 .app-login-container {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #52c41a, #389e0d);
+  overflow: hidden;
 }
 
-.app-login-card {
+.background-animation {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  max-width: 500px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  height: 100%;
+  background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+  z-index: -2;
 }
 
-.selected-app-info {
+.floating-shapes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.shape {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.1;
+  background: #fff;
+}
+
+.shape-1 {
+  width: 300px;
+  height: 300px;
+  top: -150px;
+  right: -100px;
+  animation: float 15s infinite ease-in-out;
+}
+
+.shape-2 {
+  width: 200px;
+  height: 200px;
+  bottom: -100px;
+  left: -50px;
+  animation: float 20s infinite ease-in-out reverse;
+}
+
+.shape-3 {
+  width: 150px;
+  height: 150px;
+  top: 50%;
+  left: 10%;
+  animation: float 25s infinite ease-in-out;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(10deg);
+  }
+}
+
+.login-content {
+  width: 100%;
+  max-width: 450px;
+  padding: 20px;
+  z-index: 1;
+}
+
+.login-header {
+  display: flex;
+  justify-content: flex-start;
   margin-bottom: 24px;
 }
 
-.app-details {
+.back-button {
+  color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: all 0.3s ease;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.selected-app-info {
+  margin-bottom: 32px;
+}
+
+.app-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.app-header {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  margin-bottom: 16px;
 }
 
-.app-name {
-  font-size: 16px;
-  font-weight: 500;
+.app-icon {
+  margin-right: 16px;
+  padding: 12px;
+  background: rgba(82, 196, 26, 0.1);
+  border-radius: 12px;
 }
 
-.app-code,
-.app-id {
+.app-details h2 {
+  margin: 0 0 4px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.app-details p {
+  margin: 0;
   font-size: 14px;
-  color: var(--n-text-color-secondary);
+  color: #718096;
 }
 
-.login-form {
-  margin-top: 24px;
+.app-status {
+  display: flex;
+  justify-content: center;
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  margin-bottom: 24px;
+}
+
+.login-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
 }
 
 .form-actions {
+  margin-top: 32px;
+}
+
+.danger-zone {
   margin-top: 24px;
 }
 
-.app-actions {
-  margin-top: 16px;
+.danger-text {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.my-4 {
-  margin: 16px 0;
+.delete-btn {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  transition: all 0.3s ease;
 }
 
-.mt-4 {
-  margin-top: 16px;
+.delete-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
-.flex {
-  display: flex;
-}
-
-.justify-end {
-  justify-content: flex-end;
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .login-content {
+    padding: 16px;
+  }
+  
+  .app-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .app-icon {
+    margin-right: 0;
+    margin-bottom: 16px;
+  }
 }
 </style>
