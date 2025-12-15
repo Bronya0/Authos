@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -34,19 +35,19 @@ func (j *JWTMiddleware) Middleware() echo.MiddlewareFunc {
 			var tokenType string
 
 			// 确定令牌类型和值
-			if systemAuthHeader != "" {
+			if appAuthHeader != "" {
+				// 应用令牌 - 优先级最高，因为它包含appID
+				parts := strings.SplitN(appAuthHeader, " ", 2)
+				if len(parts) == 2 && parts[0] == "Bearer" {
+					token = parts[1]
+					tokenType = "app"
+				}
+			} else if systemAuthHeader != "" {
 				// 系统管理员令牌
 				parts := strings.SplitN(systemAuthHeader, " ", 2)
 				if len(parts) == 2 && parts[0] == "Bearer" {
 					token = parts[1]
 					tokenType = "system"
-				}
-			} else if appAuthHeader != "" {
-				// 应用令牌
-				parts := strings.SplitN(appAuthHeader, " ", 2)
-				if len(parts) == 2 && parts[0] == "Bearer" {
-					token = parts[1]
-					tokenType = "app"
 				}
 			} else if authHeader != "" {
 				// 传统令牌
@@ -72,14 +73,18 @@ func (j *JWTMiddleware) Middleware() echo.MiddlewareFunc {
 				c.Set("isSystemAdmin", true)
 				c.Set("username", claims.Username)
 			case "app":
+				fmt.Printf("JWT Middleware: Parsing app token: %s\n", token)
 				claims, err := j.JWTConfig.ParseAppToken(token)
 				if err != nil {
+					fmt.Printf("JWT Middleware: App token parse error: %v\n", err)
 					return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid or expired app token"})
 				}
+				fmt.Printf("JWT Middleware: App token parsed successfully, AppID: %d, AppCode: %s\n", claims.AppID, claims.AppCode)
 				// 将应用信息存储到上下文
 				c.Set("isAppToken", true)
 				c.Set("appID", claims.AppID)
 				c.Set("appCode", claims.AppCode)
+				fmt.Printf("JWT Middleware: Context set - isAppToken: %v, appID: %d, appCode: %s\n", true, claims.AppID, claims.AppCode)
 			case "user":
 				claims, err := j.JWTConfig.ParseToken(token)
 				if err != nil {

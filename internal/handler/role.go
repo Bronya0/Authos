@@ -29,6 +29,13 @@ func (h *RoleHandler) CreateRole(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
 
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+	role.AppID = appID
+
 	// 数据验证
 	if role.Name == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Role name is required"})
@@ -58,11 +65,18 @@ func (h *RoleHandler) UpdateRole(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid role ID"})
 	}
 
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
 	var role model.Role
 	if err := c.Bind(&role); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
 	}
 	role.ID = uint(id)
+	role.AppID = appID
 
 	if err := h.RoleService.UpdateRole(&role); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update role"})

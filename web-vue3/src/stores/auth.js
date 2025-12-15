@@ -68,6 +68,18 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('currentApp', JSON.stringify(currentApp.value))
   }
 
+  // 用户认证（多租户）
+  function setAuth(userData, userToken, appData) {
+    // 设置用户token到Authorization头
+    localStorage.setItem('userToken', userToken)
+    
+    // 设置应用信息
+    if (appData) {
+      currentApp.value = appData
+      localStorage.setItem('currentApp', JSON.stringify(currentApp.value))
+    }
+  }
+
   // 清除应用认证
   function clearAppAuth() {
     appToken.value = ''
@@ -87,6 +99,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('systemUser')
     localStorage.removeItem('appToken')
     localStorage.removeItem('currentApp')
+    localStorage.removeItem('userToken')
   }
 
   // 主题切换
@@ -115,6 +128,7 @@ export const useAuthStore = defineStore('auth', () => {
     // 方法
     setSystemAuth,
     setAppAuth,
+    setAuth,
     clearAppAuth,
     logout,
     toggleTheme,

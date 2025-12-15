@@ -91,7 +91,16 @@ func main() {
 	e := echo.New()
 
 	// 配置中间件
-	e.Use(echoMiddleware.Logger())
+	e.Use(echoMiddleware.RequestLoggerWithConfig(echoMiddleware.RequestLoggerConfig{
+		LogURI:    true,
+		LogStatus: true,
+		LogHost:   true,
+		LogMethod: true,
+		LogValuesFunc: func(c echo.Context, v echoMiddleware.RequestLoggerValues) error {
+			log.Printf("%s %s %s %d", v.Host, v.Method, v.URI, v.Status)
+			return nil
+		},
+	}))
 	e.Use(echoMiddleware.Recover())
 	e.Use(corsConfig())
 
@@ -99,7 +108,7 @@ func main() {
 	// e.StaticFS("/", webFS)
 
 	// 公共路由
-	public := e.Group("/api/v1")
+	public := e.Group("/api/public")
 	{
 		// 认证相关
 		public.POST("/login", authHandler.Login)
@@ -107,19 +116,20 @@ func main() {
 		public.POST("/app-login", authHandler.AppLogin)
 		public.POST("/logout", authHandler.Logout)
 
-		// 应用相关
-		public.GET("/applications/:code", applicationHandler.GetApplicationByCode)
-		public.GET("/applications", applicationHandler.ListApplications)
-		public.POST("/applications", applicationHandler.CreateApplication)
-		public.GET("/applications/:id", applicationHandler.GetApplication)
-		public.PUT("/applications/:id", applicationHandler.UpdateApplication)
-		public.DELETE("/applications/:id", applicationHandler.DeleteApplication)
 	}
 
 	// API 路由 - 需要 JWT 认证
 	api := e.Group("/api/v1")
 	api.Use(jwtMiddleware.Middleware())
 	{
+		// 应用相关
+		api.GET("/applications/:code", applicationHandler.GetApplicationByCode)
+		api.GET("/applications", applicationHandler.ListApplications)
+		api.POST("/applications", applicationHandler.CreateApplication)
+		api.GET("/applications/:id", applicationHandler.GetApplication)
+		api.PUT("/applications/:id", applicationHandler.UpdateApplication)
+		api.DELETE("/applications/:id", applicationHandler.DeleteApplication)
+
 		// 权限检查
 		api.POST("/check", authzHandler.CheckPermission)
 

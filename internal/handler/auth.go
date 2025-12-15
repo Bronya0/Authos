@@ -13,10 +13,24 @@ import (
 
 // getAppIDFromToken 从 JWT token 中获取应用ID
 func getAppIDFromToken(c echo.Context) (uint, error) {
-	appID, ok := c.Get("appID").(uint)
-	if !ok {
+
+	// 尝试获取 appID
+	appIDInterface := c.Get("appID")
+	if appIDInterface == nil {
+		fmt.Printf("getAppIDFromToken: appID is nil in context\n")
 		return 0, echo.NewHTTPError(http.StatusUnauthorized, "App ID not found in token")
 	}
+
+	fmt.Printf("getAppIDFromToken: appID interface type: %T, value: %v\n", appIDInterface, appIDInterface)
+
+	// 尝试类型断言
+	appID, ok := appIDInterface.(uint)
+	if !ok {
+		fmt.Printf("getAppIDFromToken: Type assertion failed for appID\n")
+		return 0, echo.NewHTTPError(http.StatusUnauthorized, "App ID type assertion failed")
+	}
+
+	fmt.Printf("getAppIDFromToken: Successfully got appID: %d\n", appID)
 	return appID, nil
 }
 

@@ -107,23 +107,14 @@ const refresh = RefreshIcon
 const personCircle = PersonCircleIcon
 
 const menuOptions = computed(() => {
-  const baseMenus = [
-    {
-      label: '仪表盘',
-      key: 'Dashboard',
-      icon: () => h(NIcon, null, { default: () => h(SpeedometerIcon) })
-    },
-    {
-      label: '应用管理',
-      key: 'AppSelection',
-      icon: () => h(NIcon, null, { default: () => h(AppsIcon) })
-    }
-  ]
-
   // 只有登录了应用后才显示用户、角色等管理菜单
   if (authStore.isAppLoggedIn) {
     return [
-      ...baseMenus,
+      {
+        label: '仪表盘',
+        key: 'Dashboard',
+        icon: () => h(NIcon, null, { default: () => h(SpeedometerIcon) })
+      },
       {
         label: '用户管理',
         key: 'Users',
@@ -152,7 +143,19 @@ const menuOptions = computed(() => {
     ]
   }
 
-  return baseMenus
+  // 未登录应用时只显示仪表盘和应用管理
+  return [
+    {
+      label: '仪表盘',
+      key: 'Dashboard',
+      icon: () => h(NIcon, null, { default: () => h(SpeedometerIcon) })
+    },
+    {
+      label: '应用管理',
+      key: 'AppSelection',
+      icon: () => h(NIcon, null, { default: () => h(AppsIcon) })
+    }
+  ]
 })
 
 const userDropdownOptions = [

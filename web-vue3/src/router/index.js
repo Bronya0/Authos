@@ -35,12 +35,7 @@ const routes = [
         component: () => import('../views/Dashboard.vue'),
         meta: { title: '仪表盘', icon: 'speedometer' }
       },
-      {
-        path: 'applications',
-        name: 'Applications',
-        component: () => import('../views/Applications.vue'),
-        meta: { title: '应用管理', icon: 'apps' }
-      },
+      
       {
         path: 'users',
         name: 'Users',

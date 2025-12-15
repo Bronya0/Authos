@@ -49,12 +49,19 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Password is required"})
 	}
 
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
 	// 创建用户对象
 	user := &model.User{
 		Username: req.Username,
 		Password: req.Password,
 		Status:   req.Status,
 		RoleIDs:  req.RoleIDs,
+		AppID:    appID,
 	}
 
 	if err := h.UserService.CreateUser(user); err != nil {

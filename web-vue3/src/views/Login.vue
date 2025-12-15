@@ -21,51 +21,7 @@
               继续登录
             </n-button>
           </div>
-
-          <div class="divider">
-            <span>或者</span>
-          </div>
-
-          <div>
-            <n-button type="success" :block="true" @click="currentStep = 'create-app'">
-              <template #icon>
-                <n-icon>
-                  <add />
-                </n-icon>
-              </template>
-              创建新应用
-            </n-button>
-          </div>
         </div>
-      </div>
-
-      <!-- 创建应用步骤 -->
-      <div v-else-if="currentStep === 'create-app'" class="step-container">
-        <div class="step-header">
-          <n-steps :current="1" size="small">
-            <n-step title="创建应用" />
-            <n-step title="用户登录" />
-          </n-steps>
-        </div>
-
-        <n-form ref="createAppFormRef" :model="createAppForm" :rules="createAppRules">
-          <n-form-item path="code" label="应用代码">
-            <n-input v-model:value="createAppForm.code" placeholder="请输入应用代码，如: myapp" @blur="generateAppName" />
-          </n-form-item>
-          <n-form-item path="name" label="应用名称">
-            <n-input v-model:value="createAppForm.name" placeholder="请输入应用名称" />
-          </n-form-item>
-          <n-form-item path="description" label="应用描述">
-            <n-input v-model:value="createAppForm.description" type="textarea" placeholder="请输入应用描述" :rows="3" />
-          </n-form-item>
-
-          <div class="form-actions">
-            <n-button @click="currentStep = 'app-selection'">返回</n-button>
-            <n-button type="primary" :loading="creatingApp" @click="handleCreateApp">
-              创建并继续
-            </n-button>
-          </div>
-        </n-form>
       </div>
 
       <!-- 用户登录步骤 -->
@@ -121,7 +77,7 @@ import {
   NCard, NSteps, NStep, NSelect, NButton, NIcon,
   NForm, NFormItem, NInput, NTag, NAlert
 } from 'naive-ui'
-import { Person, LockClosed, Add } from '@vicons/ionicons5'
+import { Person, LockClosed } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/auth'
 import { useAppStore } from '../stores/app'
 import { authAPI, applicationAPI } from '../api'
@@ -131,10 +87,8 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 
 // 表单引用
-const createAppFormRef = ref()
 const loginFormRef = ref()
 const loading = ref(false)
-const creatingApp = ref(false)
 
 // 当前步骤
 const currentStep = ref('app-selection')
@@ -154,29 +108,11 @@ const appOptions = computed(() => {
   }))
 })
 
-// 创建应用表单
-const createAppForm = reactive({
-  code: '',
-  name: '',
-  description: ''
-})
-
 // 登录表单
 const loginForm = reactive({
   username: '',
   password: ''
 })
-
-// 创建应用表单验证规则
-const createAppRules = {
-  code: [
-    { required: true, message: '请输入应用代码', trigger: 'blur' },
-    { pattern: /^[a-z][a-z0-9_-]*$/, message: '应用代码只能包含小写字母、数字、下划线和连字符，且必须以字母开头', trigger: 'blur' }
-  ],
-  name: [
-    { required: true, message: '请输入应用名称', trigger: 'blur' }
-  ]
-}
 
 // 登录表单验证规则
 const loginRules = {
@@ -186,16 +122,6 @@ const loginRules = {
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' }
   ]
-}
-
-// 生成应用名称
-const generateAppName = () => {
-  if (createAppForm.code && !createAppForm.name) {
-    createAppForm.name = createAppForm.code.replace(/[-_]/g, ' ')
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ')
-  }
 }
 
 // 获取应用列表
@@ -228,33 +154,6 @@ const handleContinueWithSelectedApp = () => {
   }
 
   currentStep.value = 'user-login'
-}
-
-// 创建应用
-const handleCreateApp = async () => {
-  try {
-    await createAppFormRef.value?.validate()
-    creatingApp.value = true
-
-    const newApp = await applicationAPI.createApplication(createAppForm)
-    applications.value.push(newApp)
-    selectedAppId.value = newApp.id
-
-    // 设置当前应用
-    appStore.setCurrentApp(newApp)
-
-    appStore.showSuccess('应用创建成功')
-    currentStep.value = 'user-login'
-  } catch (error) {
-    if (error.response?.status === 409) {
-      appStore.showError('应用代码已存在')
-    } else {
-      appStore.showError('创建应用失败')
-    }
-    console.error(error)
-  } finally {
-    creatingApp.value = false
-  }
 }
 
 // 登录处理
@@ -345,31 +244,6 @@ onMounted(() => {
 
 .mb-4 {
   margin-bottom: 16px;
-}
-
-.divider {
-  text-align: center;
-  margin: 20px 0;
-  position: relative;
-  color: #999;
-}
-
-.divider::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #e8e8e8;
-  z-index: 1;
-}
-
-.divider span {
-  background: white;
-  padding: 0 16px;
-  position: relative;
-  z-index: 2;
 }
 
 .selected-app-info {

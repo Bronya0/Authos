@@ -95,7 +95,25 @@ const loginForm = reactive({
 // 登录表单验证规则
 const loginRules = {
   appId: [
-    { required: true, message: '请输入应用ID', trigger: 'blur' }
+    {
+      required: true,
+      validator: (rule, value) => {
+        // 处理数字类型的应用ID
+        if (value === null || value === undefined || value === '') {
+          return new Error('请输入应用ID')
+        }
+        // 如果是数字，转换为字符串再检查
+        if (typeof value === 'number') {
+          return value > 0 ? true : new Error('请输入有效的应用ID')
+        }
+        // 如果是字符串，检查是否为空
+        if (typeof value === 'string') {
+          return value.trim() !== '' ? true : new Error('请输入应用ID')
+        }
+        return true
+      },
+      trigger: 'blur'
+    }
   ],
   appSecret: [
     { required: true, message: '请输入应用密钥', trigger: 'blur' }
@@ -109,11 +127,24 @@ const handleLogin = async () => {
     loading.value = true
 
     try {
+      // 准备登录参数，确保参数类型正确
+      // 处理数字和字符串类型的应用ID
+      let appIdValue = loginForm.appId
+      if (typeof appIdValue === 'string') {
+        appIdValue = parseInt(appIdValue.trim())
+      }
+
+      const loginParams = {
+        appId: appIdValue,
+        appSecret: loginForm.appSecret.trim()
+      }
+
+      console.log('发送应用登录请求:', loginParams)
+
       // 调用应用登录API
-      const response = await authAPI.appLogin({
-        appId: loginForm.appId,
-        appSecret: loginForm.appSecret
-      })
+      const response = await authAPI.appLogin(loginParams)
+
+      console.log('应用登录响应:', response)
 
       // 设置应用认证
       authStore.setAppAuth(response.app, response.token)
@@ -122,26 +153,43 @@ const handleLogin = async () => {
       // 跳转到仪表盘
       router.push('/dashboard')
     } catch (error) {
-      // 如果API不可用，使用模拟验证
-      console.warn('应用登录API不可用，使用模拟验证')
+      console.error('应用登录API错误:', error)
 
-      // 简单的模拟验证：检查应用ID和密钥格式
-      if (loginForm.appId && loginForm.appSecret.length >= 8) {
-        const mockApp = selectedApp.value || {
-          id: loginForm.appId,
-          name: '应用',
-          code: 'app'
-        }
-        const mockToken = `app-token-${Date.now()}`
-
-        authStore.setAppAuth(mockApp, mockToken)
-        appStore.showSuccess('应用登录成功（模拟模式）')
-        router.push('/dashboard')
+      // 显示详细的错误信息
+      if (error.response) {
+        const status = error.response.status
+        const message = error.response.data?.message || error.message
+        console.error(`API错误状态: ${status}, 消息: ${message}`)
+        appStore.showError(`登录失败: ${message}`)
+      } else if (error.request) {
+        appStore.showError('网络错误，请检查连接')
       } else {
-        appStore.showError('应用ID或密钥错误')
+        appStore.showError('登录失败，请重试')
+      }
+
+      // 如果API不可用，使用模拟验证作为备选
+      if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
+        console.warn('应用登录API不可用，使用模拟验证')
+
+        // 简单的模拟验证：检查应用ID和密钥格式
+        if (loginForm.appId && loginForm.appSecret.length >= 8) {
+          const mockApp = selectedApp.value || {
+            id: loginForm.appId,
+            name: '应用',
+            code: 'app'
+          }
+          const mockToken = `app-token-${Date.now()}`
+
+          authStore.setAppAuth(mockApp, mockToken)
+          appStore.showSuccess('应用登录成功（模拟模式）')
+          router.push('/dashboard')
+        } else {
+          appStore.showError('应用ID或密钥格式不正确')
+        }
       }
     }
   } catch (error) {
+    console.error('表单验证错误:', error)
     appStore.showError(error.message || '登录失败')
   } finally {
     loading.value = false
@@ -184,9 +232,33 @@ const handleDeleteApp = async () => {
 // 初始化
 onMounted(() => {
   // 从应用存储获取选中的应用
+  console.log('AppLogin 初始化 - appStore.currentApp:', appStore.currentApp)
+  console.log('AppLogin 初始化 - localStorage.currentApp:', localStorage.getItem('currentApp'))
+
+  // 优先从localStorage获取应用信息（作为备用方案）
+  const storedApp = localStorage.getItem('currentApp')
+  if (storedApp) {
+    try {
+      const appData = JSON.parse(storedApp)
+      selectedApp.value = appData
+      console.log('从 localStorage 加载应用信息:', appData)
+    } catch (e) {
+      console.error('解析 localStorage 应用信息失败:', e)
+    }
+  }
+
+  // 如果应用存储中有当前应用，也使用它
   if (appStore.currentApp) {
     selectedApp.value = appStore.currentApp
-    loginForm.appId = selectedApp.value.id
+    console.log('从 appStore 加载应用信息:', appStore.currentApp)
+  }
+
+  // 自动填入应用ID
+  if (selectedApp.value) {
+    // 确保应用ID是字符串类型，以便在表单中正确显示和编辑
+    const appId = selectedApp.value.id || selectedApp.value.uuid || ''
+    loginForm.appId = typeof appId === 'number' ? appId.toString() : appId
+    console.log('设置应用ID:', loginForm.appId, '类型:', typeof loginForm.appId)
   }
 })
 </script>

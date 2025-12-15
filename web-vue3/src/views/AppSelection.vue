@@ -110,6 +110,56 @@
         </template>
       </n-card>
     </n-modal>
+
+    <!-- 应用创建成功模态框 -->
+    <n-modal v-model:show="showSuccessModal" preset="dialog" title="应用创建成功">
+      <n-alert type="success" class="mb-4">
+        应用已成功创建，请保存以下信息，应用密钥仅在创建时显示一次！
+      </n-alert>
+
+      <n-form label-placement="left" label-width="100px">
+        <n-form-item label="应用ID">
+          <n-input :value="createdApp.id" readonly />
+          <template #suffix>
+            <n-button text @click="copyToClipboard(createdApp.id)">
+              <template #icon>
+                <n-icon><copy-outline /></n-icon>
+              </template>
+            </n-button>
+          </template>
+        </n-form-item>
+
+        <n-form-item label="应用UUID">
+          <n-input :value="createdApp.uuid" readonly />
+          <template #suffix>
+            <n-button text @click="copyToClipboard(createdApp.uuid)">
+              <template #icon>
+                <n-icon><copy-outline /></n-icon>
+              </template>
+            </n-button>
+          </template>
+        </n-form-item>
+
+        <n-form-item label="应用密钥">
+          <n-input :value="createdApp.secretKey" readonly type="password" show-password-on="click" />
+          <template #suffix>
+            <n-button text @click="copyToClipboard(createdApp.secretKey)">
+              <template #icon>
+                <n-icon><copy-outline /></n-icon>
+              </template>
+            </n-button>
+          </template>
+        </n-form-item>
+      </n-form>
+
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <n-button type="primary" @click="showSuccessModal = false">
+            我已保存
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -120,7 +170,7 @@ import { useMessage, NButton, NIcon, NTag, NEmpty, NCard, NModal, NForm, NFormIt
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import { applicationAPI } from '../api'
-import { Add as AddIcon, Apps as AppsIcon, LogOut } from '@vicons/ionicons5'
+import { Add as AddIcon, Apps as AppsIcon, LogOut, CopyOutline } from '@vicons/ionicons5'
 
 const router = useRouter()
 const message = useMessage()
@@ -132,6 +182,8 @@ const applications = ref([])
 const loading = ref(false)
 const creating = ref(false)
 const showCreateModal = ref(false)
+const showSuccessModal = ref(false)
+const createdApp = ref({})
 
 // 权限检查
 const canCreateApp = computed(() => {
@@ -198,7 +250,12 @@ const handleSelectApp = (app) => {
 
 // 登录到应用
 const handleLoginToApp = (app) => {
+  console.log('选择登录应用:', app)
   appStore.setCurrentApp(app)
+
+  // 存储应用信息到localStorage作为备用
+  localStorage.setItem('currentApp', JSON.stringify(app))
+
   router.push('/app-login')
 }
 
@@ -220,21 +277,29 @@ const handleCreate = async () => {
     await formRef.value?.validate()
     creating.value = true
 
-    const newApp = await applicationAPI.createApplication(createForm)
-    message.success('应用创建成功')
+    const response = await applicationAPI.createApplication(createForm)
+
+    // 保存创建的应用信息，包括ID和密钥
+    const appInfo = {
+      id: response.appId || response.app?.id || '',
+      uuid: response.appUuid || response.app?.uuid || '',
+      secretKey: response.secretKey || '',
+      code: createForm.code,
+      name: createForm.name,
+      description: createForm.description || ''
+    }
+
+    createdApp.value = appInfo
+
+    // 关闭创建模态框，显示成功模态框
     showCreateModal.value = false
+    showSuccessModal.value = true
 
     // 清空表单
     Object.assign(createForm, { code: '', name: '', description: '' })
 
     // 重新获取应用列表
     await fetchApplications()
-
-    // 自动选择新创建的应用
-    appStore.setCurrentApp(newApp)
-    message.success(`已自动选择新创建的应用: ${newApp.name}`)
-
-    // 移除自动跳转逻辑，用户可以手动选择应用进行登录
 
   } catch (error) {
     if (error.response?.status === 409) {
@@ -245,6 +310,23 @@ const handleCreate = async () => {
     console.error(error)
   } finally {
     creating.value = false
+  }
+}
+
+// 复制到剪贴板
+const copyToClipboard = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success('已复制到剪贴板')
+  } catch (error) {
+    // 降级方案
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    message.success('已复制到剪贴板')
   }
 }
 
