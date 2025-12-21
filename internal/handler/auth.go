@@ -25,28 +25,33 @@ func getAppIDFromToken(c echo.Context) (uint, error) {
 	fmt.Printf("getAppIDFromToken: appID interface type: %T, value: %v\n", appIDInterface, appIDInterface)
 
 	// 尝试类型断言
-	appID, ok := appIDInterface.(uint)
-	if !ok {
-		fmt.Printf("getAppIDFromToken: Type assertion failed for appID\n")
+	switch v := appIDInterface.(type) {
+	case uint:
+		return v, nil
+	case float64:
+		return uint(v), nil
+	case int:
+		return uint(v), nil
+	default:
+		fmt.Printf("getAppIDFromToken: Type assertion failed for appID, actual type: %T\n", appIDInterface)
 		return 0, echo.NewHTTPError(http.StatusUnauthorized, "App ID type assertion failed")
 	}
-
-	fmt.Printf("getAppIDFromToken: Successfully got appID: %d\n", appID)
-	return appID, nil
 }
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
 	UserService        *service.UserService
 	ApplicationService *service.ApplicationService
+	AuditLogService    *service.AuditLogService
 	JWTConfig          *utils.JWTConfig
 }
 
 // NewAuthHandler 创建认证处理器实例
-func NewAuthHandler(userService *service.UserService, applicationService *service.ApplicationService, jwtConfig *utils.JWTConfig) *AuthHandler {
+func NewAuthHandler(userService *service.UserService, applicationService *service.ApplicationService, auditLogService *service.AuditLogService, jwtConfig *utils.JWTConfig) *AuthHandler {
 	return &AuthHandler{
 		UserService:        userService,
 		ApplicationService: applicationService,
+		AuditLogService:    auditLogService,
 		JWTConfig:          jwtConfig,
 	}
 }
@@ -106,6 +111,17 @@ func (h *AuthHandler) SystemLogin(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
 
+	// 记录审计日志
+	h.AuditLogService.Record(&model.AuditLog{
+		AppID:    0, // 系统管理员登录记录为系统日志
+		UserID:   user.ID,
+		Username: user.Username,
+		Action:   "SYSTEM_LOGIN",
+		Resource: "APPLICATION",
+		IP:       c.RealIP(),
+		Status:   1,
+	})
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"token":   token,
 		"user":    user,
@@ -146,6 +162,15 @@ func (h *AuthHandler) AppLogin(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
+
+	// 记录审计日志
+	h.AuditLogService.Record(&model.AuditLog{
+		AppID:    app.ID,
+		Action:   "APP_LOGIN",
+		Resource: "APPLICATION",
+		IP:       c.RealIP(),
+		Status:   1,
+	})
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"token":   token,
@@ -194,6 +219,17 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
 
+	// 记录审计日志
+	h.AuditLogService.Record(&model.AuditLog{
+		AppID:    app.ID,
+		UserID:   user.ID,
+		Username: user.Username,
+		Action:   "LOGIN",
+		Resource: "USER",
+		IP:       c.RealIP(),
+		Status:   1,
+	})
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"token":   token,
 		"user":    user,
@@ -204,6 +240,51 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 // Logout 登出接口
 func (h *AuthHandler) Logout(c echo.Context) error {
+	// 尝试记录审计日志
+	appIDInterface := c.Get("appID")
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+
+	if appIDInterface != nil && userIDInterface != nil {
+		h.AuditLogService.Record(&model.AuditLog{
+			AppID:    appIDInterface.(uint),
+			UserID:   userIDInterface.(uint),
+			Username: usernameInterface.(string),
+			Action:   "LOGOUT",
+			Resource: "USER",
+			IP:       c.RealIP(),
+			Status:   1,
+		})
+	}
+
 	// JWT是无状态的，登出只需客户端删除令牌即可
 	return c.JSON(http.StatusOK, map[string]string{"message": "Logout successful"})
+}
+
+// GetDashboardStats 获取仪表盘统计数据
+func (h *AuthHandler) GetDashboardStats(c echo.Context) error {
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Unauthorized"})
+	}
+
+	var userCount int64
+	var roleCount int64
+	var menuCount int64
+	var apiCount int64
+	var auditCount int64
+
+	h.UserService.DB.Model(&model.User{}).Where("app_id = ?", appID).Count(&userCount)
+	h.UserService.DB.Model(&model.Role{}).Where("app_id = ?", appID).Count(&roleCount)
+	h.UserService.DB.Model(&model.Menu{}).Where("app_id = ?", appID).Count(&menuCount)
+	h.UserService.DB.Model(&model.ApiPermission{}).Where("app_id = ?", appID).Count(&apiCount)
+	h.UserService.DB.Model(&model.AuditLog{}).Where("app_id = ?", appID).Count(&auditCount)
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"users":     userCount,
+		"roles":     roleCount,
+		"menus":     menuCount,
+		"apiPerms":  apiCount,
+		"auditLogs": auditCount,
+	})
 }

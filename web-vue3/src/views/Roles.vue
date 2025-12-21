@@ -3,8 +3,12 @@
         <n-card>
             <template #header>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>角色列表</span>
-                    <n-button type="primary" @click="showAddModal = true">
+            <n-space align="center">
+                <span>角色列表</span>
+                <n-input v-model:value="searchName" placeholder="搜索角色名称" clearable @update:value="handleSearch" style="width: 200px" />
+                <n-button @click="handleReset">重置</n-button>
+            </n-space>
+            <n-button type="primary" @click="showAddModal = true">
                         <template #icon>
                             <n-icon>
                                 <add />
@@ -52,9 +56,10 @@ import { ref, reactive, computed, onMounted, h } from 'vue'
 import { roleAPI } from '../api'
 import { useAppStore } from '../stores/app'
 import { Person, Add, Create, Trash, List, Key } from '@vicons/ionicons5'
-import { NButton, NIcon, NSpace } from 'naive-ui'
+import { NButton, NIcon, NSpace, NTag, NTooltip } from 'naive-ui'
 import RoleMenuModal from '../components/RoleMenuModal.vue'
 import RoleApiPermissionModal from '../components/RoleApiPermissionModal.vue'
+import { formatDate } from '../utils/format'
 
 const appStore = useAppStore()
 
@@ -68,6 +73,16 @@ const currentRoleUUID = ref('')
 const currentRoleName = ref('')
 const showMenuModal = ref(false)
 const showApiPermissionModal = ref(false)
+const searchName = ref('')
+
+const handleSearch = () => {
+    loadRoles()
+}
+
+const handleReset = () => {
+    searchName.value = ''
+    loadRoles()
+}
 
 const formRef = ref()
 const form = reactive({
@@ -102,13 +117,69 @@ const columns = [
     {
         title: '名称',
         key: 'name',
-        width: 500
+        width: 150
+    },
+    {
+        title: '菜单权限',
+        key: 'menuCount',
+        width: 250,
+        render(row) {
+            if (!row.menuPreview || row.menuPreview.length === 0) {
+                return h('span', { style: 'color: #ccc' }, '无菜单权限')
+            }
+            const tags = row.menuPreview.map(name => h(NTag, { size: 'small' }, { default: () => name }))
+            const content = h(NSpace, { size: [4, 4] }, { default: () => tags })
+
+            if (row.menuCount > 3) {
+                return h(NSpace, { align: 'center', size: 4 }, {
+                    default: () => [
+                        content,
+                        h(NTooltip, { trigger: 'hover' }, {
+                            trigger: () => h('span', { style: 'font-size: 12px; color: #18a058; cursor: pointer; white-space: nowrap' }, `等 ${row.menuCount} 个...`),
+                            default: () => '点击“菜单”按钮查看详情'
+                        })
+                    ]
+                })
+            }
+            return content
+        }
+    },
+    {
+        title: '接口权限',
+        key: 'apiPermCount',
+        width: 250,
+        render(row) {
+            if (!row.apiPermPreview || row.apiPermPreview.length === 0) {
+                return h('span', { style: 'color: #ccc' }, '无接口权限')
+            }
+            const tags = row.apiPermPreview.map(name => h(NTag, { size: 'small', type: 'info' }, { default: () => name }))
+            const content = h(NSpace, { size: [4, 4] }, { default: () => tags })
+
+            if (row.apiPermCount > 3) {
+                return h(NSpace, { align: 'center', size: 4 }, {
+                    default: () => [
+                        content,
+                        h(NTooltip, { trigger: 'hover' }, {
+                            trigger: () => h('span', { style: 'font-size: 12px; color: #2080f0; cursor: pointer; white-space: nowrap' }, `等 ${row.apiPermCount} 个...`),
+                            default: () => '点击“权限”按钮查看详情'
+                        })
+                    ]
+                })
+            }
+            return content
+        }
+    },
+    {
+        title: '创建时间',
+        key: 'CreatedAt',
+        width: 180,
+        render: (row) => formatDate(row.CreatedAt)
     },
 
     {
         title: '操作',
         key: 'actions',
-        width: 200,
+        width: 250,
         render: (row) => h(
             NSpace,
             null,
@@ -183,7 +254,7 @@ const pagination = {
 const loadRoles = async () => {
     loading.value = true
     try {
-        const data = await roleAPI.getRoles()
+        const data = await roleAPI.getRoles({ name: searchName.value })
         roles.value = data
     } catch (error) {
         appStore.showError('加载角色列表失败')

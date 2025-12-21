@@ -162,12 +162,14 @@ func (s *UserService) GetUserByUsernameForSystem(username string) (*model.User, 
 // ListUsersByApp 列出指定应用的所有用户
 func (s *UserService) ListUsersByApp(appID uint) ([]*model.User, error) {
 	var users []*model.User
-	if err := s.DB.Preload("Roles").Where("app_id = ?", appID).Find(&users).Error; err != nil {
+	// 预加载角色信息
+	if err := s.DB.Preload("Roles").Where("app_id = ?", appID).Order("id desc").Find(&users).Error; err != nil {
 		return nil, err
 	}
 
 	// 填充 RoleIDs
 	for _, user := range users {
+		user.RoleIDs = make([]uint, 0, len(user.Roles))
 		for _, role := range user.Roles {
 			user.RoleIDs = append(user.RoleIDs, role.ID)
 		}

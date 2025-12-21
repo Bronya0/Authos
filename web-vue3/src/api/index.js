@@ -51,7 +51,14 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   response => response.data,
   error => {
-    if (error.response?.status === 401) {
+    // 检查是否是登录相关的请求，如果是则不进行全局401跳转，交由页面自行处理
+    const isLoginRequest = error.config?.url && (
+      error.config.url.includes('/public/app-login') || 
+      error.config.url.includes('/public/system-login') || 
+      error.config.url.includes('/public/login')
+    )
+
+    if (error.response?.status === 401 && !isLoginRequest) {
       // 清除所有认证信息
       localStorage.removeItem('systemToken')
       localStorage.removeItem('systemUser')
@@ -74,11 +81,13 @@ export const authAPI = {
   // 用户登录
   login: (data) => api.post('/public/login', data),
   // 登出
-  logout: () => api.post('/public/logout')  
+  logout: () => api.post('/public/logout'),
+  // 获取仪表盘统计
+  getDashboardStats: () => api.get('/v1/dashboard/stats')
 }
 
 export const userAPI = {
-  getUsers: () => api.get('/v1/users'),
+  getUsers: (params) => api.get('/v1/users', { params }),
   getUser: (id) => api.get(`/v1/users/${id}`),
   createUser: (data) => api.post('/v1/users', data),
   updateUser: (id, data) => api.put(`/v1/users/${id}`, data),
@@ -86,7 +95,7 @@ export const userAPI = {
 }
 
 export const roleAPI = {
-  getRoles: () => api.get('/v1/roles'),
+  getRoles: (params) => api.get('/v1/roles', { params }),
   getRole: (id) => api.get(`/v1/roles/${id}`),
   createRole: (data) => api.post('/v1/roles', data),
   updateRole: (id, data) => api.put(`/v1/roles/${id}`, data),
@@ -98,7 +107,7 @@ export const roleAPI = {
 }
 
 export const menuAPI = {
-  getMenus: () => api.get('/v1/menus'),
+  getMenus: (params) => api.get('/v1/menus', { params }),
   getMenuTree: () => api.get('/v1/menus/tree'),
   getNonSystemMenuTree: () => api.get('/v1/menus/non-system-tree'),
   getMenu: (id) => api.get(`/v1/menus/${id}`),
@@ -108,7 +117,7 @@ export const menuAPI = {
 }
 
 export const permissionAPI = {
-  getPermissions: () => api.get('/v1/permissions'),
+  getPermissions: (params) => api.get('/v1/permissions', { params }),
   getPermission: (id) => api.get(`/v1/permissions/${id}`),
   createPermission: (data) => api.post('/v1/permissions', data),
   updatePermission: (id, data) => api.put(`/v1/permissions/${id}`, data),
@@ -116,23 +125,28 @@ export const permissionAPI = {
 }
 
 export const apiPermissionAPI = {
-  getApiPermissions: () => api.get('/v1/api-permissions'),
+  getApiPermissions: (params) => api.get('/v1/api-permissions', { params }),
   getApiPermission: (id) => api.get(`/v1/api-permissions/${id}`),
   createApiPermission: (data) => api.post('/v1/api-permissions', data),
   updateApiPermission: (id, data) => api.put(`/v1/api-permissions/${id}`, data),
   deleteApiPermission: (id) => api.delete(`/v1/api-permissions/${id}`),
   getApiPermissionsForRole: (roleUUID) => api.get(`/v1/api-permissions/roles/${roleUUID}`),
-  addApiPermissionToRole: (roleUUID, data) => api.post(`/api-permissions/roles/${roleUUID}`, data),
-  removeApiPermissionFromRole: (roleUUID, data) => api.delete(`/api-permissions/roles/${roleUUID}`, { data })
+  addApiPermissionToRole: (roleUUID, data) => api.post(`/v1/api-permissions/roles/${roleUUID}`, data),
+  removeApiPermissionFromRole: (roleUUID, data) => api.delete(`/v1/api-permissions/roles/${roleUUID}`, { data })
 }
 
 export const applicationAPI = {
-  getApplications: () => api.get('/v1/applications'),
+  getApplications: (params) => api.get('/v1/applications', { params }),
   getApplication: (id) => api.get(`/v1/applications/${id}`),
   createApplication: (data) => api.post('/v1/applications', data),
   updateApplication: (id, data) => api.put(`/v1/applications/${id}`, data),
   deleteApplication: (id) => api.delete(`/v1/applications/${id}`),
   getApplicationByCode: (code) => api.get(`/v1/applications/${code}`)
+}
+
+export const auditLogAPI = {
+  getLogs: (params) => api.get('/v1/audit-logs', { params }),
+  getSystemLogs: (params) => api.get('/v1/system/audit-logs', { params })
 }
 
 export default api

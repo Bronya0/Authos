@@ -27,6 +27,7 @@ func (p *ApiPermission) BeforeCreate(tx *gorm.DB) error {
 
 // HTTP方法常量
 const (
+	HTTP_ALL     = "*"
 	HTTP_GET     = "GET"
 	HTTP_POST    = "POST"
 	HTTP_PUT     = "PUT"
@@ -39,6 +40,7 @@ const (
 // 获取所有HTTP方法
 func GetAllHttpMethods() []string {
 	return []string{
+		HTTP_ALL,
 		HTTP_GET,
 		HTTP_POST,
 		HTTP_PUT,

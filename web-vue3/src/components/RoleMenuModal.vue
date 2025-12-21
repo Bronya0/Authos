@@ -11,7 +11,9 @@
           :checkable="true" 
           :show-line="true" 
           :indent="20" 
-          :cascade="true"
+          :cascade="false"
+          :expanded-keys="expandedKeys"
+          @update:expanded-keys="(keys) => expandedKeys = keys"
           block-line 
           key-field="ID" 
           label-field="name" 
@@ -82,6 +84,43 @@ const loading = ref(false)
 const saving = ref(false)
 const menuTree = ref([])
 const selectedMenuIds = ref([])
+const expandedKeys = ref([])
+
+// 获取所有菜单ID用于默认展开
+const getAllMenuIds = (menus) => {
+  let ids = []
+  menus.forEach(menu => {
+    ids.push(menu.ID)
+    if (menu.children && menu.children.length > 0) {
+      ids = ids.concat(getAllMenuIds(menu.children))
+    }
+  })
+  return ids
+}
+
+// 获取子节点的所有ID
+const getChildrenIds = (node) => {
+  let ids = []
+  if (node.children && node.children.length > 0) {
+    node.children.forEach(child => {
+      ids.push(child.ID)
+      ids = ids.concat(getChildrenIds(child))
+    })
+  }
+  return ids
+}
+
+// 查找节点
+const findNode = (menus, id) => {
+  for (const menu of menus) {
+    if (menu.ID === id) return menu
+    if (menu.children && menu.children.length > 0) {
+      const found = findNode(menu.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
 
 // 监听visible变化
 watch(() => props.visible, (val) => {
@@ -102,7 +141,9 @@ const loadMenus = async () => {
   loading.value = true
   try {
     const data = await menuAPI.getMenuTree()
-    menuTree.value = transformMenuData(data || [])
+    const transformedData = transformMenuData(data || [])
+    menuTree.value = transformedData
+    expandedKeys.value = getAllMenuIds(transformedData)
   } catch (error) {
     appStore.showError('加载菜单列表失败')
   } finally {
@@ -124,8 +165,22 @@ const loadRoleMenus = async () => {
 
 // 处理菜单选择
 const handleCheck = (keys, options, meta) => {
-  selectedMenuIds.value = keys
-  console.log("菜单选择变化:", keys, options, meta)
+  if (meta.action === 'check') {
+    // 选中时，同步选中所有子节点
+    const node = findNode(menuTree.value, meta.node.ID)
+    if (node) {
+      const childIds = getChildrenIds(node)
+      selectedMenuIds.value = [...new Set([...keys, ...childIds])]
+    } else {
+      selectedMenuIds.value = keys
+    }
+  } else if (meta.action === 'uncheck') {
+    // 取消选中时，同步取消选中所有子节点
+    const childIds = getChildrenIds(meta.node)
+    selectedMenuIds.value = keys.filter(key => !childIds.includes(key))
+  } else {
+    selectedMenuIds.value = keys
+  }
 }
 
 // 保存菜单分配

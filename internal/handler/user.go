@@ -79,6 +79,38 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to create user: %v", err)})
 	}
 
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.UserService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     userID,
+		Username:   username,
+		Action:     "CREATE",
+		Resource:   "USER",
+		ResourceID: fmt.Sprintf("%d", user.ID),
+		Content:    fmt.Sprintf("创建用户: %s", user.Username),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"user":    user,
 		"message": "User created successfully",
@@ -120,6 +152,38 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update user"})
 	}
 
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.UserService.DB.Create(&model.AuditLog{
+		AppID:      user.AppID, // 这里如果是系统管理员修改可能需要从context拿appID
+		UserID:     userID,
+		Username:   username,
+		Action:     "UPDATE",
+		Resource:   "USER",
+		ResourceID: fmt.Sprintf("%d", id),
+		Content:    fmt.Sprintf("更新用户: %s", user.Username),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	// 如果提供了密码，则更新密码
 	if req.Password != "" {
 		if err := h.UserService.UpdateUserPassword(uint(id), req.Password); err != nil {
@@ -150,6 +214,38 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 	if err := h.UserService.DeleteUser(uint(id), appID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to delete user"})
 	}
+
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.UserService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     userID,
+		Username:   username,
+		Action:     "DELETE",
+		Resource:   "USER",
+		ResourceID: fmt.Sprintf("%d", id),
+		Content:    fmt.Sprintf("删除用户ID: %d", id),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "User deleted successfully"})
 }
@@ -184,9 +280,28 @@ func (h *UserHandler) ListUsers(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
 	}
 
-	users, err := h.UserService.ListUsersByApp(appID)
-	if err != nil {
+	username := c.QueryParam("username")
+	status := c.QueryParam("status")
+
+	var users []*model.User
+	db := h.UserService.DB.Preload("Roles").Where("app_id = ?", appID)
+	if username != "" {
+		db = db.Where("username LIKE ?", "%"+username+"%")
+	}
+	if status != "" {
+		db = db.Where("status = ?", status)
+	}
+
+	if err := db.Order("id desc").Find(&users).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to get users"})
+	}
+
+	// 填充 RoleIDs
+	for _, user := range users {
+		user.RoleIDs = make([]uint, 0, len(user.Roles))
+		for _, role := range user.Roles {
+			user.RoleIDs = append(user.RoleIDs, role.ID)
+		}
 	}
 
 	return c.JSON(http.StatusOK, users)

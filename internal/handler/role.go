@@ -51,6 +51,38 @@ func (h *RoleHandler) CreateRole(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to create role: %v", err)})
 	}
 
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.RoleService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     userID,
+		Username:   username,
+		Action:     "CREATE",
+		Resource:   "ROLE",
+		ResourceID: fmt.Sprintf("%d", role.ID),
+		Content:    fmt.Sprintf("创建角色: %s", role.Name),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"role":    role,
 		"message": "Role created successfully",
@@ -82,6 +114,19 @@ func (h *RoleHandler) UpdateRole(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update role"})
 	}
 
+	// 记录审计日志
+	h.RoleService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     c.Get("userID").(uint),
+		Username:   c.Get("username").(string),
+		Action:     "UPDATE",
+		Resource:   "ROLE",
+		ResourceID: fmt.Sprintf("%d", id),
+		Content:    fmt.Sprintf("更新角色: %s", role.Name),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"role":    role,
 		"message": "Role updated successfully",
@@ -107,6 +152,38 @@ func (h *RoleHandler) DeleteRole(c echo.Context) error {
 		log.Printf("Error deleting role %d: %v", id, err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": fmt.Sprintf("Failed to delete role: %v", err)})
 	}
+
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.RoleService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     userID,
+		Username:   username,
+		Action:     "DELETE",
+		Resource:   "ROLE",
+		ResourceID: fmt.Sprintf("%d", id),
+		Content:    fmt.Sprintf("删除角色ID: %d", id),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Role deleted successfully"})
 }
@@ -141,9 +218,43 @@ func (h *RoleHandler) ListRoles(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
 	}
 
-	roles, err := h.RoleService.ListRolesByApp(appID)
-	if err != nil {
+	name := c.QueryParam("name")
+
+	db := h.RoleService.DB.Preload("Menus").Where("app_id = ?", appID)
+	if name != "" {
+		db = db.Where("name LIKE ?", "%"+name+"%")
+	}
+
+	var roles []*model.Role
+	if err := db.Order("id asc").Find(&roles).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to get roles"})
+	}
+
+	for _, role := range roles {
+		// 菜单信息
+		role.MenuCount = len(role.Menus)
+		previewCount := 3
+		if role.MenuCount < previewCount {
+			previewCount = role.MenuCount
+		}
+		role.MenuPreview = make([]string, 0, previewCount)
+		for i := 0; i < previewCount; i++ {
+			role.MenuPreview = append(role.MenuPreview, role.Menus[i].Name)
+		}
+
+		// API 权限信息 (通过 Casbin)
+		roleKey := fmt.Sprintf("role:%s", role.UUID)
+		policies, _ := h.RoleService.CasbinService.Enforcer.GetFilteredPolicy(0, roleKey)
+		role.ApiPermCount = len(policies)
+
+		apiPreviewCount := 3
+		if role.ApiPermCount < apiPreviewCount {
+			apiPreviewCount = role.ApiPermCount
+		}
+		role.ApiPermPreview = make([]string, 0, apiPreviewCount)
+		for i := 0; i < apiPreviewCount; i++ {
+			role.ApiPermPreview = append(role.ApiPermPreview, fmt.Sprintf("%s %s", policies[i][2], policies[i][1]))
+		}
 	}
 
 	return c.JSON(http.StatusOK, roles)
@@ -255,6 +366,38 @@ func (h *RoleHandler) AssignPermissions(c echo.Context) error {
 	if err := h.RoleService.AssignPermissions(uint(id), appID, req.Permissions); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to assign permissions"})
 	}
+
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.RoleService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     userID,
+		Username:   username,
+		Action:     "UPDATE",
+		Resource:   "ROLE_PERMISSION",
+		ResourceID: fmt.Sprintf("%d", id),
+		Content:    fmt.Sprintf("分配角色接口权限, 角色ID: %d, 权限数量: %d", id, len(req.Permissions)),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Permissions assigned successfully"})
 }

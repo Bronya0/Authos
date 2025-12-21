@@ -14,14 +14,20 @@ const routes = [
     meta: { requiresSystemAuth: true }
   },
   {
+    path: '/login',
+    redirect: '/system-login'
+  },
+  {
     path: '/app-selection',
     name: 'AppSelection',
     component: () => import('../views/AppSelection.vue'),
-    meta: { requiresSystemAuth: true }
+    meta: { requiresSystemAuth: true, title: '应用管理' }
   },
   {
-    path: '/login',
-    redirect: '/system-login'
+    path: '/system-audit-logs',
+    name: 'SystemAuditLogs',
+    component: () => import('../views/AuditLogs.vue'),
+    meta: { requiresSystemAuth: true, system: true, title: '系统审计日志' }
   },
   {
     path: '/',
@@ -33,38 +39,44 @@ const routes = [
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('../views/Dashboard.vue'),
-        meta: { title: '仪表盘', icon: 'speedometer' }
+        meta: { requiresAuth: true, title: '仪表盘', icon: 'speedometer' }
       },
       
       {
         path: 'users',
         name: 'Users',
         component: () => import('../views/Users.vue'),
-        meta: { title: '用户管理', icon: 'people' }
+        meta: { requiresAuth: true, title: '用户管理', icon: 'people' }
       },
       {
         path: 'roles',
         name: 'Roles',
         component: () => import('../views/Roles.vue'),
-        meta: { title: '角色管理', icon: 'person' }
+        meta: { requiresAuth: true, title: '角色管理', icon: 'person' }
       },
       {
         path: 'menus',
         name: 'Menus',
         component: () => import('../views/Menus.vue'),
-        meta: { title: '菜单管理', icon: 'list' }
+        meta: { requiresAuth: true, title: '菜单管理', icon: 'list' }
       },
       {
         path: 'permissions',
         name: 'Permissions',
         component: () => import('../views/Permissions.vue'),
-        meta: { title: '权限配置', icon: 'key' }
+        meta: { requiresAuth: true, title: '权限配置', icon: 'key' }
+      },
+      {
+        path: 'audit-logs',
+        name: 'AuditLogs',
+        component: () => import('../views/AuditLogs.vue'),
+        meta: { requiresAuth: true, title: '审计日志', icon: 'document-text' }
       },
       {
         path: 'api-docs',
         name: 'ApiDocs',
         component: () => import('../views/ApiDocs.vue'),
-        meta: { title: '接口文档', icon: 'book' }
+        meta: { requiresAuth: true, title: '接口文档', icon: 'book' }
       }
     ]
   }

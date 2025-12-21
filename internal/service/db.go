@@ -1,13 +1,16 @@
 package service
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -64,6 +67,7 @@ func autoMigrate(db *gorm.DB) error {
 		&model.Role{},
 		&model.Menu{},
 		&model.ApiPermission{},
+		&model.AuditLog{},
 		// CasbinRule 会被 Gorm Adapter 自动迁移
 	)
 }
@@ -76,12 +80,13 @@ func seedData(db *gorm.DB) error {
 	if appCount > 0 {
 		return nil // 已有数据，跳过种子初始化
 	}
-
+	uuid := uuid.New().String()
 	// 创建默认应用
 	defaultApp := &model.Application{
+		UUID:        uuid,
 		Name:        "默认应用",
 		Code:        "default",
-		SecretKey:   "default-secret-key",
+		SecretKey:   uuid,
 		Status:      1,
 		Description: "系统默认应用",
 	}
@@ -107,15 +112,56 @@ func seedData(db *gorm.DB) error {
 		return err
 	}
 
-	// 创建超级管理员用户，生成复杂度较高的密码
-	adminPassword := generateSecurePassword()
+	// 交互式创建管理员账户
+	var adminUsername, adminPassword string
+
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("========================================")
+	fmt.Println("检测到没有管理员账户，请选择创建方式：")
+	fmt.Println("1. 自动生成 (默认)")
+	fmt.Println("2. 手动输入")
+	fmt.Print("请输入选项 (1/2): ")
+
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	if choice == "2" {
+		// 手动输入
+		for {
+			fmt.Print("请输入管理员用户名 (默认为 admin): ")
+			inputUsername, _ := reader.ReadString('\n')
+			inputUsername = strings.TrimSpace(inputUsername)
+			if inputUsername == "" {
+				adminUsername = "admin"
+			} else {
+				adminUsername = inputUsername
+			}
+
+			fmt.Print("请输入管理员密码: ")
+			inputPassword, _ := reader.ReadString('\n')
+			inputPassword = strings.TrimSpace(inputPassword)
+			if inputPassword == "" {
+				fmt.Println("密码不能为空，请重新输入")
+				continue
+			}
+			adminPassword = inputPassword
+			break
+		}
+	} else {
+		// 自动生成
+		adminUsername = "admin"
+		adminPassword = generateSecurePassword()
+	}
+
+	// 创建管理员用户
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 
 	adminUser := &model.User{
-		Username: "admin",
+		Username: adminUsername,
 		Password: string(hashedPassword),
 		Status:   1,
 		AppID:    defaultApp.ID,
@@ -127,8 +173,12 @@ func seedData(db *gorm.DB) error {
 	// 打印初始管理员密码到日志
 	log.Printf("========================================")
 	log.Printf("初始管理员账户已创建")
-	log.Printf("用户名: admin")
-	log.Printf("密码: %s", adminPassword)
+	log.Printf("用户名: %s", adminUsername)
+	if choice != "2" {
+		log.Printf("密码: %s", adminPassword)
+	} else {
+		log.Printf("密码: (已手动设置)")
+	}
 	log.Printf("========================================")
 
 	// 为超级管理员用户分配角色

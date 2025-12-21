@@ -3,7 +3,11 @@
     <n-card>
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>菜单列表</span>
+          <n-space align="center">
+            <span>菜单列表</span>
+            <n-input v-model:value="searchName" placeholder="搜索菜单名称" clearable @update:value="handleSearch" style="width: 200px" />
+            <n-button @click="handleReset">重置</n-button>
+          </n-space>
           <n-button type="primary" @click="showAddModal = true">
             <template #icon>
               <n-icon>
@@ -136,6 +140,17 @@ const saving = ref(false)
 const showModal = ref(false)
 const isEdit = ref(false)
 const currentMenuId = ref(null)
+const searchName = ref('')
+
+// 处理搜索
+const handleSearch = () => {
+  loadMenus()
+}
+
+const handleReset = () => {
+  searchName.value = ''
+  loadMenus()
+}
 
 // 级联选择相关状态
 const checkedKeys = ref([])
@@ -375,13 +390,34 @@ const columns = [
   }
 ]
 
+// 获取所有菜单ID用于默认展开
+const getAllMenuIds = (menus) => {
+  let ids = []
+  menus.forEach(menu => {
+    ids.push(menu.ID)
+    if (menu.children && menu.children.length > 0) {
+      ids = ids.concat(getAllMenuIds(menu.children))
+    }
+  })
+  return ids
+}
+
 const loadMenus = async () => {
   loading.value = true
   try {
     // 使用标准菜单树API（现在所有数据都是用户自定义的）
-    const data = await menuAPI.getMenuTree()
-    // 确保数据结构正确处理
-    menuTree.value = transformMenuData(data || [])
+    // 如果有搜索，使用列表API
+    let data;
+    if (searchName.value) {
+      data = await menuAPI.getMenus({ name: searchName.value })
+      // 搜索模式下展示扁平结构或构建临时树
+      menuTree.value = transformMenuData(data || [])
+    } else {
+      data = await menuAPI.getMenuTree()
+      const transformedData = transformMenuData(data || [])
+      menuTree.value = transformedData
+      expandedKeys.value = getAllMenuIds(transformedData)
+    }
   } catch (error) {
     appStore.showError('加载菜单列表失败')
   } finally {
@@ -474,9 +510,38 @@ const resetForm = () => {
   currentMenuId.value = null
 }
 
+// 获取子节点的所有ID
+const getChildrenIds = (node) => {
+  let ids = []
+  if (node.children && node.children.length > 0) {
+    node.children.forEach(child => {
+      ids.push(child.ID)
+      ids = ids.concat(getChildrenIds(child))
+    })
+  }
+  return ids
+}
+
 // 级联选择事件处理
 const handleCheckedKeysChange = (keys, options, meta) => {
-  checkedKeys.value = keys
+  if (meta.action === 'check') {
+    // 选中时，同步选中所有子节点
+    const node = options.find(opt => opt.ID === meta.node.ID)
+    if (node) {
+      const childIds = getChildrenIds(node)
+      const newKeys = [...new Set([...keys, ...childIds])]
+      checkedKeys.value = newKeys
+    } else {
+      checkedKeys.value = keys
+    }
+  } else if (meta.action === 'uncheck') {
+    // 取消选中时，同步取消选中所有子节点
+    const childIds = getChildrenIds(meta.node)
+    const newKeys = keys.filter(key => !childIds.includes(key))
+    checkedKeys.value = newKeys
+  } else {
+    checkedKeys.value = keys
+  }
 }
 
 const handleIndeterminateKeysChange = (keys) => {

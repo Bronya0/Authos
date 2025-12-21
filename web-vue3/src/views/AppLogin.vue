@@ -72,29 +72,23 @@
           </n-form-item>
 
           <div class="form-actions">
-            <n-button type="primary" size="large" :loading="loading" @click="handleLogin" block>
+            <n-button type="primary" size="large" :loading="loading" @click="handleLogin" class="login-btn">
               <template #icon>
                 <n-icon><log-in /></n-icon>
               </template>
               登录应用
             </n-button>
+            <n-button type="error" size="large" @click="handleDeleteApp" :disabled="!selectedApp" class="delete-btn">
+              <template #icon>
+                <n-icon>
+                  <trash-outline />
+                </n-icon>
+              </template>
+              删除应用
+            </n-button>
           </div>
         </n-form>
       </n-card>
-      
-      <div class="danger-zone">
-        <n-divider>
-          <span class="danger-text">危险操作</span>
-        </n-divider>
-        <n-button type="error" @click="handleDeleteApp" block :disabled="!selectedApp" class="delete-btn">
-          <template #icon>
-            <n-icon>
-              <trash-outline />
-            </n-icon>
-          </template>
-          删除当前应用
-        </n-button>
-      </div>
     </div>
   </div>
 </template>
@@ -309,6 +303,7 @@ onMounted(() => {
   align-items: center;
   min-height: 100vh;
   overflow: hidden;
+  user-select: none;
 }
 
 .background-animation {
@@ -376,6 +371,7 @@ onMounted(() => {
   max-width: 450px;
   padding: 20px;
   z-index: 1;
+  user-select: text;
 }
 
 .login-header {
@@ -473,29 +469,29 @@ onMounted(() => {
 
 .form-actions {
   margin-top: 32px;
+  display: flex;
+  gap: 12px;
 }
 
-.danger-zone {
-  margin-top: 24px;
-}
-
-.danger-text {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 14px;
-  font-weight: 500;
+.login-btn {
+  flex: 2;
 }
 
 .delete-btn {
-  background: rgba(255, 255, 255, 0.1);
+  flex: 1;
+  background: rgba(245, 101, 101, 0.2);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(245, 101, 101, 0.5);
+  color: #f56565;
   border-radius: 8px;
   transition: all 0.3s ease;
 }
 
 .delete-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: #f56565;
+  color: #fff;
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 101, 101, 0.4);
 }
 
 /* 响应式设计 */

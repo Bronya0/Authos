@@ -120,9 +120,39 @@ func (s *RoleService) GetRoleByUUID(uuid string) (*model.Role, error) {
 // ListRolesByApp 列出指定应用的所有角色
 func (s *RoleService) ListRolesByApp(appID uint) ([]*model.Role, error) {
 	var roles []*model.Role
-	if err := s.DB.Where("app_id = ?", appID).Order("id asc").Find(&roles).Error; err != nil {
+	// 预加载菜单以统计数量和预览
+	if err := s.DB.Preload("Menus").Where("app_id = ?", appID).Order("id asc").Find(&roles).Error; err != nil {
 		return nil, err
 	}
+
+	for _, role := range roles {
+		// 菜单信息
+		role.MenuCount = len(role.Menus)
+		previewCount := 3
+		if role.MenuCount < previewCount {
+			previewCount = role.MenuCount
+		}
+		role.MenuPreview = make([]string, 0, previewCount)
+		for i := 0; i < previewCount; i++ {
+			role.MenuPreview = append(role.MenuPreview, role.Menus[i].Name)
+		}
+
+		// API 权限信息 (通过 Casbin)
+		roleKey := fmt.Sprintf("role:%s", role.UUID)
+		policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(0, roleKey)
+		role.ApiPermCount = len(policies)
+
+		apiPreviewCount := 3
+		if role.ApiPermCount < apiPreviewCount {
+			apiPreviewCount = role.ApiPermCount
+		}
+		role.ApiPermPreview = make([]string, 0, apiPreviewCount)
+		for i := 0; i < apiPreviewCount; i++ {
+			// policies[i] 为 [sub, obj, act]
+			role.ApiPermPreview = append(role.ApiPermPreview, fmt.Sprintf("%s %s", policies[i][2], policies[i][1]))
+		}
+	}
+
 	return roles, nil
 }
 

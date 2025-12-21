@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 
+	"Authos/internal/model"
 	"Authos/internal/service"
 )
 
@@ -48,6 +50,38 @@ func (h *ApplicationHandler) CreateApplication(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
 
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.ApplicationService.DB.Create(&model.AuditLog{
+		AppID:      0, // 系统级操作
+		UserID:     userID,
+		Username:   username,
+		Action:     "CREATE",
+		Resource:   "APPLICATION",
+		ResourceID: fmt.Sprintf("%d", app.ID),
+		Content:    fmt.Sprintf("创建应用: %s (%s)", app.Name, app.Code),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"app":       app,
 		"message":   "Application created successfully",
@@ -59,9 +93,20 @@ func (h *ApplicationHandler) CreateApplication(c echo.Context) error {
 
 // ListApplications 列出所有应用
 func (h *ApplicationHandler) ListApplications(c echo.Context) error {
-	apps, err := h.ApplicationService.ListApplications()
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to get applications"})
+	name := c.QueryParam("name")
+	code := c.QueryParam("code")
+
+	var apps []*model.Application
+	db := h.ApplicationService.DB
+	if name != "" {
+		db = db.Where("name LIKE ?", "%"+name+"%")
+	}
+	if code != "" {
+		db = db.Where("code LIKE ?", "%"+code+"%")
+	}
+
+	if err := db.Order("id asc").Find(&apps).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "获取应用列表失败"})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -98,6 +143,38 @@ func (h *ApplicationHandler) UpdateApplication(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
 
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.ApplicationService.DB.Create(&model.AuditLog{
+		AppID:      0,
+		UserID:     userID,
+		Username:   username,
+		Action:     "UPDATE",
+		Resource:   "APPLICATION",
+		ResourceID: id,
+		Content:    fmt.Sprintf("更新应用: %s", req.Name),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"app":     app,
 		"message": "Application updated successfully",
@@ -111,6 +188,38 @@ func (h *ApplicationHandler) DeleteApplication(c echo.Context) error {
 	if err := h.ApplicationService.DeleteApplication(id); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
+
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.ApplicationService.DB.Create(&model.AuditLog{
+		AppID:      0,
+		UserID:     userID,
+		Username:   username,
+		Action:     "DELETE",
+		Resource:   "APPLICATION",
+		ResourceID: id,
+		Content:    fmt.Sprintf("删除应用ID: %s", id),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Application deleted successfully"})
 }

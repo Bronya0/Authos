@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
+	"Authos/internal/model"
 	"Authos/internal/service"
 
 	"github.com/labstack/echo/v4"
@@ -29,12 +31,27 @@ func (h *ApiPermissionHandler) ListApiPermissions(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
 	}
 
-	permissions, err := h.ApiPermissionService.GetAllApiPermissions(appID)
-	if err != nil {
+	name := c.QueryParam("name")
+	path := c.QueryParam("path")
+	method := c.QueryParam("method")
+
+	db := h.ApiPermissionService.DB.Where("app_id = ?", appID)
+	if name != "" {
+		db = db.Where("name LIKE ?", "%"+name+"%")
+	}
+	if path != "" {
+		db = db.Where("path LIKE ?", "%"+path+"%")
+	}
+	if method != "" {
+		db = db.Where("method = ?", method)
+	}
+
+	var perms []*model.ApiPermission
+	if err := db.Order("id asc").Find(&perms).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "获取接口权限列表失败"})
 	}
 
-	return c.JSON(http.StatusOK, permissions)
+	return c.JSON(http.StatusOK, perms)
 }
 
 // GetApiPermission 获取接口权限
@@ -82,6 +99,38 @@ func (h *ApiPermissionHandler) CreateApiPermission(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
 
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.ApiPermissionService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     userID,
+		Username:   username,
+		Action:     "CREATE",
+		Resource:   "API_PERMISSION",
+		ResourceID: fmt.Sprintf("%d", permission.ID),
+		Content:    fmt.Sprintf("创建接口权限: %s", permission.Name),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	return c.JSON(http.StatusCreated, permission)
 }
 
@@ -114,6 +163,38 @@ func (h *ApiPermissionHandler) UpdateApiPermission(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
 
+	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
+
+	h.ApiPermissionService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     userID,
+		Username:   username,
+		Action:     "UPDATE",
+		Resource:   "API_PERMISSION",
+		ResourceID: fmt.Sprintf("%d", id),
+		Content:    fmt.Sprintf("更新接口权限: %s", permission.Name),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	return c.JSON(http.StatusOK, permission)
 }
 
@@ -133,6 +214,19 @@ func (h *ApiPermissionHandler) DeleteApiPermission(c echo.Context) error {
 	if err := h.ApiPermissionService.DeleteApiPermission(uint(id), appID); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
+
+	// 记录审计日志
+	h.ApiPermissionService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     c.Get("userID").(uint),
+		Username:   c.Get("username").(string),
+		Action:     "DELETE",
+		Resource:   "API_PERMISSION",
+		ResourceID: fmt.Sprintf("%d", id),
+		Content:    fmt.Sprintf("删除接口权限ID: %d", id),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "接口权限删除成功"})
 }
@@ -183,6 +277,19 @@ func (h *ApiPermissionHandler) AddApiPermissionToRole(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
 
+	// 记录审计日志
+	h.ApiPermissionService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     c.Get("userID").(uint),
+		Username:   c.Get("username").(string),
+		Action:     "ASSIGN",
+		Resource:   "ROLE_PERMISSION",
+		ResourceID: roleUUID,
+		Content:    fmt.Sprintf("为角色分配权限: %s", req.PermissionUUID),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
+
 	return c.JSON(http.StatusOK, map[string]string{"message": "为角色添加接口权限成功"})
 }
 
@@ -210,6 +317,19 @@ func (h *ApiPermissionHandler) RemoveApiPermissionFromRole(c echo.Context) error
 	if err := h.ApiPermissionService.RemoveApiPermissionFromRole(appID, roleUUID, req.PermissionUUID); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
+
+	// 记录审计日志
+	h.ApiPermissionService.DB.Create(&model.AuditLog{
+		AppID:      appID,
+		UserID:     c.Get("userID").(uint),
+		Username:   c.Get("username").(string),
+		Action:     "UNASSIGN",
+		Resource:   "ROLE_PERMISSION",
+		ResourceID: roleUUID,
+		Content:    fmt.Sprintf("移除角色权限: %s", req.PermissionUUID),
+		IP:         c.RealIP(),
+		Status:     1,
+	})
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "移除角色接口权限成功"})
 }

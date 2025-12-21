@@ -3,7 +3,13 @@
     <n-card>
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>权限列表</span>
+          <n-space align="center">
+            <span>权限列表</span>
+            <n-input v-model:value="searchParams.name" placeholder="搜索权限名称" clearable @update:value="handleSearch" style="width: 180px" />
+            <n-input v-model:value="searchParams.path" placeholder="搜索路径" clearable @update:value="handleSearch" style="width: 180px" />
+            <n-select v-model:value="searchParams.method" placeholder="方法" clearable :options="methodOptions" @update:value="handleSearch" style="width: 120px" />
+            <n-button @click="handleReset">重置</n-button>
+          </n-space>
           <n-button type="primary" @click="showAddModal = true">
             <template #icon>
               <n-icon>
@@ -67,6 +73,22 @@ const saving = ref(false)
 const showModal = ref(false)
 const isEdit = ref(false)
 const currentPermissionId = ref(null)
+const searchParams = reactive({
+  name: '',
+  path: '',
+  method: null
+})
+
+const handleSearch = () => {
+  loadPermissions()
+}
+
+const handleReset = () => {
+  searchParams.name = ''
+  searchParams.path = ''
+  searchParams.method = null
+  loadPermissions()
+}
 
 const formRef = ref()
 const form = reactive({
@@ -96,6 +118,7 @@ const actionOptions = [
 ]
 
 const methodOptions = [
+  { label: '全部', value: '*' },
   { label: 'GET', value: 'GET' },
   { label: 'POST', value: 'POST' },
   { label: 'PUT', value: 'PUT' },
@@ -192,7 +215,7 @@ const pagination = {
 const loadPermissions = async () => {
   loading.value = true
   try {
-    const data = await apiPermissionAPI.getApiPermissions()
+    const data = await apiPermissionAPI.getApiPermissions(searchParams)
     // 确保数据是数组格式，处理null和undefined的情况
     if (data && Array.isArray(data)) {
       permissions.value = data

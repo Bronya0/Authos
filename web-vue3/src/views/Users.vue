@@ -3,7 +3,15 @@
     <n-card>
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>用户列表</span>
+          <n-space align="center">
+            <span>用户列表</span>
+            <n-input v-model:value="searchParams.username" placeholder="搜索用户名" clearable @update:value="handleSearch" style="width: 200px" />
+            <n-select v-model:value="searchParams.status" placeholder="状态" clearable :options="[
+              { label: '启用', value: 1 },
+              { label: '禁用', value: 0 }
+            ]" @update:value="handleSearch" style="width: 120px" />
+            <n-button @click="handleReset">重置</n-button>
+          </n-space>
           <n-button type="primary" @click="showAddModal = true">
             <template #icon>
               <n-icon>
@@ -61,7 +69,7 @@ import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import { formatDate, formatStatus, getStatusType } from '../utils/format'
 import { People, Add, Create, Trash } from '@vicons/ionicons5'
-import { NIcon, NButton, NSpace } from 'naive-ui'
+import { NIcon, NButton, NSpace, NTag } from 'naive-ui'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -73,6 +81,20 @@ const saving = ref(false)
 const showModal = ref(false)
 const isEdit = ref(false)
 const currentUserId = ref(null)
+const searchParams = reactive({
+  username: '',
+  status: null
+})
+
+const handleSearch = () => {
+  loadUsers()
+}
+
+const handleReset = () => {
+  searchParams.username = ''
+  searchParams.status = null
+  loadUsers()
+}
 
 const formRef = ref()
 const form = reactive({
@@ -87,7 +109,16 @@ const rules = {
     { required: true, message: '请输入用户名', trigger: 'blur' }
   ],
   password: [
-    { required: !isEdit.value, message: '请输入密码', trigger: 'blur' }
+    { 
+      required: true, 
+      validator: (rule, value) => {
+        if (!isEdit.value && !value) {
+          return new Error('请输入密码')
+        }
+        return true
+      },
+      trigger: 'blur' 
+    }
   ]
 }
 
@@ -124,8 +155,9 @@ const columns = [
   {
     title: '状态',
     key: 'status',
+    width: 100,
     render: (row) => h(
-      'n-tag',
+      NTag,
       { type: getStatusType(row.status) },
       { default: () => formatStatus(row.status) }
     )
@@ -133,30 +165,40 @@ const columns = [
   {
     title: '角色',
     key: 'roles',
+    width: 250,
     render: (row) => {
       const roles = row.roles || []
-      return h(
-        'n-space',
-        null,
-        {
-          default: () => roles.map((role, index) =>
-            h(
-              'n-tag',
-              {
-                type: 'info',
-                size: 'small',
-                round: true
-              },
-              { default: () => role.name }
-            )
-          )
-        }
+      if (roles.length === 0) return h('span', { style: 'color: #ccc' }, '无角色')
+      
+      const tags = roles.slice(0, 3).map((role) =>
+        h(
+          NTag,
+          {
+            type: 'info',
+            size: 'small',
+            round: true
+          },
+          { default: () => role.name }
+        )
       )
+
+      const content = h(NSpace, { size: [4, 4] }, { default: () => tags })
+
+      if (roles.length > 3) {
+        return h(NSpace, { align: 'center', size: 4 }, {
+          default: () => [
+            content,
+            h('span', { style: 'font-size: 12px; color: #999; white-space: nowrap' }, `等 ${roles.length} 个`)
+          ]
+        })
+      }
+      return content
     }
   },
   {
     title: '创建时间',
     key: 'createdAt',
+    width: 180,
     render: (row) => formatDate(row.CreatedAt || row.createdAt)
   },
   {
@@ -211,7 +253,7 @@ const pagination = {
 const loadUsers = async () => {
   loading.value = true
   try {
-    const data = await userAPI.getUsers()
+    const data = await userAPI.getUsers(searchParams)
     users.value = data
   } catch (error) {
     appStore.showError('加载用户列表失败')

@@ -1,6 +1,6 @@
 <template>
   <n-layout class="main-layout" has-sider>
-    <n-layout-sider bordered collapse-mode="width" :collapsed-width="64" :width="240" :collapsed="collapsed"
+    <n-layout-sider v-if="authStore.isAppLoggedIn" bordered collapse-mode="width" :collapsed-width="64" :width="240" :collapsed="collapsed"
       show-trigger @collapse="collapsed = true" @expand="collapsed = false">
       <div class="sidebar-header">
         <n-icon size="24" color="#1890ff">
@@ -24,29 +24,18 @@
 
           <div class="header-center">
             <!-- 当前应用显示与切换 -->
-            <n-space v-if="authStore.currentApp" :size="8" align="center">
-              <n-tag type="info" size="small">
-                <template #icon>
-                  <n-icon>
-                    <apps-icon />
-                  </n-icon>
-                </template>
-                {{ authStore.currentApp.name }} ({{ authStore.currentApp.code }})
-              </n-tag>
-              <n-button 
-                quaternary 
-                circle 
-                size="small"
-                title="切换应用"
-                @click="handleSwitchApp"
-              >
-                <template #icon>
-                  <n-icon>
-                    <AppsShuffleIcon />
-                  </n-icon>
-                </template>
-              </n-button>
-            </n-space>
+            <n-button 
+              v-if="authStore.isAppLoggedIn && authStore.currentApp"
+              quaternary 
+              @click="handleSwitchApp"
+            >
+              <template #icon>
+                <n-icon>
+                  <AppsIcon />
+                </n-icon>
+              </template>
+              应用管理中心：{{ authStore.currentApp.name }} ({{ authStore.currentApp.code }})
+            </n-button>
           </div>
 
           <div class="header-right">
@@ -151,6 +140,11 @@ const menuOptions = computed(() => {
         icon: () => h(NIcon, null, { default: () => h(KeyIcon) })
       },
       {
+        label: '审计日志',
+        key: 'AuditLogs',
+        icon: () => h(NIcon, null, { default: () => h(ListIcon) })
+      },
+      {
         label: '接口文档',
         key: 'ApiDocs',
         icon: () => h(NIcon, null, { default: () => h(BookIcon) })
@@ -158,17 +152,12 @@ const menuOptions = computed(() => {
     ]
   }
 
-  // 未登录应用时只显示仪表盘和应用管理
+  // 未登录应用时只显示仪表盘
   return [
     {
       label: '仪表盘',
       key: 'Dashboard',
       icon: () => h(NIcon, null, { default: () => h(SpeedometerIcon) })
-    },
-    {
-      label: '应用管理',
-      key: 'AppSelection',
-      icon: () => h(NIcon, null, { default: () => h(AppsIcon) })
     }
   ]
 })

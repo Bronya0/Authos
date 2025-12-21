@@ -72,6 +72,7 @@ watch(showModal, (val) => {
 // 获取HTTP方法颜色
 const getMethodColor = (method) => {
   const colorMap = {
+    '*': 'primary',
     'GET': 'success',
     'POST': 'info',
     'PUT': 'warning',
@@ -104,7 +105,7 @@ const columns = [
     width: 120,
     render: (row) => h(NTag, {
       type: getMethodColor(row.method)
-    }, () => row.method)
+    }, () => row.method === '*' ? '全部' : row.method)
   },
   {
     title: '描述',

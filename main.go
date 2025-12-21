@@ -69,17 +69,19 @@ func main() {
 	menuService := service.NewMenuService(dbService.DB)
 	apiPermissionService := service.NewApiPermissionService(dbService.DB, casbinService, roleService)
 	applicationService := service.NewApplicationService(dbService.DB)
+	auditLogService := service.NewAuditLogService(dbService.DB)
 
 	// 初始化 JWT 配置
 	jwtConfig := utils.NewJWTConfig(jwtSecret, jwtExpireTime)
 
 	// 初始化 HTTP 处理器
-	authHandler := handler.NewAuthHandler(userService, applicationService, jwtConfig)
+	authHandler := handler.NewAuthHandler(userService, applicationService, auditLogService, jwtConfig)
 	userHandler := handler.NewUserHandler(userService)
 	roleHandler := handler.NewRoleHandler(roleService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	apiPermissionHandler := handler.NewApiPermissionHandler(apiPermissionService)
 	applicationHandler := handler.NewApplicationHandler(applicationService)
+	auditLogHandler := handler.NewAuditLogHandler(auditLogService)
 	authzHandler := handler.NewAuthzHandler(casbinService, menuService)
 
 	// 初始化 JWT 中间件
@@ -144,6 +146,9 @@ func main() {
 			users.DELETE("/:id", userHandler.DeleteUser)
 		}
 
+		// 仪表盘统计
+		api.GET("/dashboard/stats", authHandler.GetDashboardStats)
+
 		// 角色管理
 		roles := api.Group("/roles")
 		{
@@ -183,6 +188,10 @@ func main() {
 			menus.PUT("/:id", menuHandler.UpdateMenu)
 			menus.DELETE("/:id", menuHandler.DeleteMenu)
 		}
+
+		// 审计日志
+		api.GET("/audit-logs", auditLogHandler.ListAuditLogs)
+		api.GET("/system/audit-logs", auditLogHandler.ListSystemAuditLogs)
 	}
 
 	// 启动服务器
