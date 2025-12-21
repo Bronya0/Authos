@@ -118,11 +118,6 @@ const transformMenuData = (data) => {
   if (!Array.isArray(data)) return []
 
   return data.map(item => {
-    // 收集所有菜单ID作为默认展开的键
-    if (item.ID || item.id) {
-      defaultExpandedKeys.value.push(item.ID || item.id)
-    }
-    
     return {
       // 确保关键字段存在
       ID: item.ID || item.id,
@@ -165,6 +160,7 @@ const checkedKeys = ref([])
 const indeterminateKeys = ref([])
 const expandedKeys = ref([])
 const selectedKeys = ref([])
+const defaultExpandedKeys = ref([])
 
 const formRef = ref()
 const form = reactive({
@@ -315,6 +311,18 @@ const showAddModal = computed({
 
 const getRowKey = (row) => row.id || row.ID || row.key || row.uuid || row.Id
 
+// 获取所有菜单ID用于默认展开
+const getAllMenuIds = (menus) => {
+  let ids = []
+  menus.forEach(menu => {
+    ids.push(menu.ID)
+    if (menu.children && menu.children.length > 0) {
+      ids = ids.concat(getAllMenuIds(menu.children))
+    }
+  })
+  return ids
+}
+
 const columns = [
   {
     title: 'ID',
@@ -398,22 +406,8 @@ const columns = [
   }
 ]
 
-// 获取所有菜单ID用于默认展开
-const getAllMenuIds = (menus) => {
-  let ids = []
-  menus.forEach(menu => {
-    ids.push(menu.ID)
-    if (menu.children && menu.children.length > 0) {
-      ids = ids.concat(getAllMenuIds(menu.children))
-    }
-  })
-  return ids
-}
-
 const loadMenus = async () => {
   loading.value = true
-  // 清空之前的展开键
-  defaultExpandedKeys.value = []
   try {
     // 使用标准菜单树API（现在所有数据都是用户自定义的）
     // 如果有搜索，使用列表API
@@ -427,6 +421,7 @@ const loadMenus = async () => {
       const transformedData = transformMenuData(data || [])
       menuTree.value = transformedData
       expandedKeys.value = getAllMenuIds(transformedData)
+      defaultExpandedKeys.value = getAllMenuIds(transformedData)
     }
   } catch (error) {
     appStore.showError('加载菜单列表失败')

@@ -12,30 +12,40 @@ import (
 	"Authos/pkg/utils"
 )
 
-// getAppIDFromToken 从 JWT token 中获取应用ID
+// getAppIDFromToken 从 JWT token 或请求头中获取应用ID
 func getAppIDFromToken(c echo.Context) (uint, error) {
 
-	// 尝试获取 appID
+	// 尝试从上下文获取 appID（JWT token）
 	appIDInterface := c.Get("appID")
-	if appIDInterface == nil {
-		fmt.Printf("getAppIDFromToken: appID is nil in context\n")
-		return 0, echo.NewHTTPError(http.StatusUnauthorized, "App ID not found in token")
+	if appIDInterface != nil {
+		fmt.Printf("getAppIDFromToken: appID interface type: %T, value: %v\n", appIDInterface, appIDInterface)
+
+		// 尝试类型断言
+		switch v := appIDInterface.(type) {
+		case uint:
+			return v, nil
+		case float64:
+			return uint(v), nil
+		case int:
+			return uint(v), nil
+		default:
+			fmt.Printf("getAppIDFromToken: Type assertion failed for appID from token, actual type: %T\n", appIDInterface)
+		}
 	}
 
-	fmt.Printf("getAppIDFromToken: appID interface type: %T, value: %v\n", appIDInterface, appIDInterface)
-
-	// 尝试类型断言
-	switch v := appIDInterface.(type) {
-	case uint:
-		return v, nil
-	case float64:
-		return uint(v), nil
-	case int:
-		return uint(v), nil
-	default:
-		fmt.Printf("getAppIDFromToken: Type assertion failed for appID, actual type: %T\n", appIDInterface)
-		return 0, echo.NewHTTPError(http.StatusUnauthorized, "App ID type assertion failed")
+	// 如果JWT中没有appID，尝试从请求头获取
+	appIDStr := c.Request().Header.Get("X-App-ID")
+	if appIDStr != "" {
+		var appID uint
+		if _, err := fmt.Sscanf(appIDStr, "%d", &appID); err == nil && appID > 0 {
+			fmt.Printf("getAppIDFromToken: Successfully got appID from header: %d\n", appID)
+			return appID, nil
+		}
+		fmt.Printf("getAppIDFromToken: Invalid appID format in header: %s\n", appIDStr)
 	}
+
+	fmt.Printf("getAppIDFromToken: appID not found in token or header\n")
+	return 0, echo.NewHTTPError(http.StatusUnauthorized, "App ID not found in token or header")
 }
 
 // AuthHandler 认证处理器

@@ -124,9 +124,14 @@ const columns = [
         key: 'menuCount',
         width: 250,
         render(row) {
-            if (!row.menuPreview || row.menuPreview.length === 0) {
+            if (!row.menuCount || row.menuCount === 0) {
                 return h('span', { style: 'color: #ccc' }, '无菜单权限')
             }
+            
+            if (!row.menuPreview || row.menuPreview.length === 0) {
+                return h('span', { style: 'color: #18a058' }, `${row.menuCount} 个菜单`)
+            }
+            
             const tags = row.menuPreview.map(name => h(NTag, { size: 'small' }, { default: () => name }))
             const content = h(NSpace, { size: [4, 4] }, { default: () => tags })
 
@@ -149,9 +154,14 @@ const columns = [
         key: 'apiPermCount',
         width: 250,
         render(row) {
-            if (!row.apiPermPreview || row.apiPermPreview.length === 0) {
+            if (!row.apiPermCount || row.apiPermCount === 0) {
                 return h('span', { style: 'color: #ccc' }, '无接口权限')
             }
+            
+            if (!row.apiPermPreview || row.apiPermPreview.length === 0) {
+                return h('span', { style: 'color: #2080f0' }, `${row.apiPermCount} 个接口`)
+            }
+            
             const tags = row.apiPermPreview.map(name => h(NTag, { size: 'small', type: 'info' }, { default: () => name }))
             const content = h(NSpace, { size: [4, 4] }, { default: () => tags })
 
@@ -272,10 +282,12 @@ const loadRoleCounts = async (rolesData) => {
             const roleId = role.ID || role.id
             try {
                 const count = await roleAPI.getRoleMenusCount(roleId)
-                roleMenuCounts.value[roleId] = count
+                role.menuCount = count
+                role.menuPreview = [] // 暂时设置为空数组
             } catch (error) {
                 console.error(`获取角色${roleId}的菜单数量失败:`, error)
-                roleMenuCounts.value[roleId] = 0
+                role.menuCount = 0
+                role.menuPreview = []
             }
         })
         
@@ -283,10 +295,12 @@ const loadRoleCounts = async (rolesData) => {
             const roleId = role.ID || role.id
             try {
                 const count = await roleAPI.getRoleApiPermissionsCount(roleId)
-                roleApiPermissionCounts.value[roleId] = count
+                role.apiPermCount = count
+                role.apiPermPreview = [] // 暂时设置为空数组
             } catch (error) {
                 console.error(`获取角色${roleId}的接口权限数量失败:`, error)
-                roleApiPermissionCounts.value[roleId] = 0
+                role.apiPermCount = 0
+                role.apiPermPreview = []
             }
         })
         

@@ -62,11 +62,6 @@ const transformMenuData = (data) => {
   if (!Array.isArray(data)) return []
 
   return data.map(item => {
-    // 收集所有菜单ID作为默认展开的键
-    if (item.ID || item.id) {
-      defaultExpandedKeys.value.push(item.ID || item.id)
-    }
-    
     return {
       // 确保关键字段存在
       ID: item.ID || item.id,
@@ -146,8 +141,6 @@ watch(showModal, (val) => {
 // 加载菜单树
 const loadMenus = async () => {
   loading.value = true
-  // 清空之前的展开键
-  defaultExpandedKeys.value = []
   try {
     const data = await menuAPI.getMenuTree()
     const transformedData = transformMenuData(data || [])
@@ -209,6 +202,5 @@ const handleSave = async () => {
 
 const resetForm = () => {
   selectedMenuIds.value = []
-  defaultExpandedKeys.value = []
 }
 </script>
