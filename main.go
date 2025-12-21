@@ -123,9 +123,9 @@ func main() {
 	api.Use(jwtMiddleware.Middleware())
 	{
 		// 应用相关
-		api.GET("/applications/:code", applicationHandler.GetApplicationByCode)
 		api.GET("/applications", applicationHandler.ListApplications)
 		api.POST("/applications", applicationHandler.CreateApplication)
+		api.GET("/applications/by-code/:code", applicationHandler.GetApplicationByCode)
 		api.GET("/applications/:id", applicationHandler.GetApplication)
 		api.PUT("/applications/:id", applicationHandler.UpdateApplication)
 		api.DELETE("/applications/:id", applicationHandler.DeleteApplication)

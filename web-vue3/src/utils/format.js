@@ -19,6 +19,20 @@ export const getStatusType = (status) => {
 }
 
 export const getRoleTagType = (index) => {
-  const types = ['default', 'info', 'success', 'warning', 'error']
+  const types = ['info', 'success', 'warning', 'error', 'default', 'primary']
   return types[index % types.length]
+}
+
+export const getRoleColor = (index) => {
+  const colors = [
+    '#2080f0', // 蓝色
+    '#18a058', // 绿色
+    '#f0a020', // 橙色
+    '#d03050', // 红色
+    '#909399', // 灰色
+    '#722ed1', // 紫色
+    '#13c2c2', // 青色
+    '#eb2f96'  // 粉色
+  ]
+  return colors[index % colors.length]
 }

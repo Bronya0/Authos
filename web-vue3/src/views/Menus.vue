@@ -49,6 +49,7 @@
       <n-tree :data="menuTree" :render-label="renderLabel" :render-suffix="renderSuffix" :expand-on-click="true"
         :checkable="true" :cascade="true" :check-strategy="'all'" :checked-keys="checkedKeys"
         :indeterminate-keys="indeterminateKeys" :expanded-keys="expandedKeys" :selected-keys="selectedKeys"
+        :default-expanded-keys="defaultExpandedKeys"
         :show-line="true" :indent="20" block-line key-field="ID" label-field="name" children-field="children"
         @update:checked-keys="handleCheckedKeysChange" @update:indeterminate-keys="handleIndeterminateKeysChange"
         @update:expanded-keys="handleExpandedKeysChange" @update:selected-keys="handleSelectedKeysChange" />
@@ -116,22 +117,29 @@ const appStore = useAppStore()
 const transformMenuData = (data) => {
   if (!Array.isArray(data)) return []
 
-  return data.map(item => ({
-    // 确保关键字段存在
-    ID: item.ID || item.id,
-    name: item.name || item.Name,
-    type: item.type || item.Type,
-    parentId: item.parentId || item.ParentID,
-    path: item.path || item.Path,
-    component: item.component || item.Component,
-    sort: item.sort || item.Sort,
-    hidden: item.hidden || item.Hidden,
-    isSystem: item.isSystem || item.IsSystem,
-    // 递归处理children
-    children: item.children && item.children.length > 0
-      ? transformMenuData(item.children)
-      : []
-  }))
+  return data.map(item => {
+    // 收集所有菜单ID作为默认展开的键
+    if (item.ID || item.id) {
+      defaultExpandedKeys.value.push(item.ID || item.id)
+    }
+    
+    return {
+      // 确保关键字段存在
+      ID: item.ID || item.id,
+      name: item.name || item.Name,
+      type: item.type || item.Type,
+      parentId: item.parentId || item.ParentID,
+      path: item.path || item.Path,
+      component: item.component || item.Component,
+      sort: item.sort || item.Sort,
+      hidden: item.hidden || item.Hidden,
+      isSystem: item.isSystem || item.IsSystem,
+      // 递归处理children
+      children: item.children && item.children.length > 0
+        ? transformMenuData(item.children)
+        : []
+    }
+  })
 }
 
 const menuTree = ref([])
@@ -404,6 +412,8 @@ const getAllMenuIds = (menus) => {
 
 const loadMenus = async () => {
   loading.value = true
+  // 清空之前的展开键
+  defaultExpandedKeys.value = []
   try {
     // 使用标准菜单树API（现在所有数据都是用户自定义的）
     // 如果有搜索，使用列表API
@@ -561,6 +571,7 @@ const clearSelection = () => {
   checkedKeys.value = []
   indeterminateKeys.value = []
   selectedKeys.value = []
+  // 保持菜单展开状态，不清空展开键
 }
 
 // 批量删除

@@ -103,7 +103,33 @@ export const roleAPI = {
   getRoleMenus: (id) => api.get(`/v1/roles/${id}/menus`),
   updateRoleMenus: (id, data) => api.put(`/v1/roles/${id}/menus`, data),
   getRolePermissions: (id) => api.get(`/v1/roles/${id}/permissions`),
-  updateRolePermissions: (id, data) => api.put(`/v1/roles/${id}/permissions`, data)
+  updateRolePermissions: (id, data) => api.put(`/v1/roles/${id}/permissions`, data),
+  // 使用现有的API获取菜单和权限数量
+  getRoleMenusCount: async (id) => {
+    try {
+      const menus = await api.get(`/v1/roles/${id}/menus`)
+      return Array.isArray(menus) ? menus.length : 0
+    } catch (error) {
+      console.error('获取角色菜单数量失败:', error)
+      return 0
+    }
+  },
+  getRoleApiPermissionsCount: async (id) => {
+    try {
+      // 需要先获取角色的UUID
+      const role = await api.get(`/v1/roles/${id}`)
+      const roleUUID = role.uuid || role.UUID
+      if (!roleUUID) {
+        console.error('角色UUID不存在')
+        return 0
+      }
+      const permissions = await api.get(`/v1/api-permissions/roles/${roleUUID}`)
+      return Array.isArray(permissions) ? permissions.length : 0
+    } catch (error) {
+      console.error('获取角色接口权限数量失败:', error)
+      return 0
+    }
+  }
 }
 
 export const menuAPI = {
@@ -141,7 +167,7 @@ export const applicationAPI = {
   createApplication: (data) => api.post('/v1/applications', data),
   updateApplication: (id, data) => api.put(`/v1/applications/${id}`, data),
   deleteApplication: (id) => api.delete(`/v1/applications/${id}`),
-  getApplicationByCode: (code) => api.get(`/v1/applications/${code}`)
+  getApplicationByCode: (code) => api.get(`/v1/applications/by-code/${code}`)
 }
 
 export const auditLogAPI = {

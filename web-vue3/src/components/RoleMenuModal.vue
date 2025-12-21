@@ -2,9 +2,9 @@
   <n-drawer v-model:show="showModal" :width="500" placement="right" @after-leave="resetForm">
     <n-drawer-content title="菜单权限分配" closable>
       <n-spin :show="loading">
-        <n-tree 
-          :data="menuTree" 
-          :checked-keys="selectedMenuIds" 
+        <n-tree
+          :data="menuTree"
+          :checked-keys="selectedMenuIds"
           :on-update:checked-keys="handleCheck"
           :expand-on-click="true" 
           :selectable="false" 
@@ -61,22 +61,29 @@ const appStore = useAppStore()
 const transformMenuData = (data) => {
   if (!Array.isArray(data)) return []
 
-  return data.map(item => ({
-    // 确保关键字段存在
-    ID: item.ID || item.id,
-    name: item.name || item.Name,
-    type: item.type || item.Type,
-    parentId: item.parentId || item.ParentID,
-    path: item.path || item.Path,
-    component: item.component || item.Component,
-    sort: item.sort || item.Sort,
-    hidden: item.hidden || item.Hidden,
-    isSystem: item.isSystem || item.IsSystem,
-    // 递归处理children
-    children: item.children && item.children.length > 0
-      ? transformMenuData(item.children)
-      : []
-  }))
+  return data.map(item => {
+    // 收集所有菜单ID作为默认展开的键
+    if (item.ID || item.id) {
+      defaultExpandedKeys.value.push(item.ID || item.id)
+    }
+    
+    return {
+      // 确保关键字段存在
+      ID: item.ID || item.id,
+      name: item.name || item.Name,
+      type: item.type || item.Type,
+      parentId: item.parentId || item.ParentID,
+      path: item.path || item.Path,
+      component: item.component || item.Component,
+      sort: item.sort || item.Sort,
+      hidden: item.hidden || item.Hidden,
+      isSystem: item.isSystem || item.IsSystem,
+      // 递归处理children
+      children: item.children && item.children.length > 0
+        ? transformMenuData(item.children)
+        : []
+    }
+  })
 }
 
 const showModal = ref(false)
@@ -139,6 +146,8 @@ watch(showModal, (val) => {
 // 加载菜单树
 const loadMenus = async () => {
   loading.value = true
+  // 清空之前的展开键
+  defaultExpandedKeys.value = []
   try {
     const data = await menuAPI.getMenuTree()
     const transformedData = transformMenuData(data || [])
@@ -200,5 +209,6 @@ const handleSave = async () => {
 
 const resetForm = () => {
   selectedMenuIds.value = []
+  defaultExpandedKeys.value = []
 }
 </script>

@@ -97,7 +97,7 @@ const handleReset = () => {
 }
 
 const formRef = ref()
-const form = reactive({
+const form = ref({
   username: '',
   password: '',
   status: 1,
@@ -276,13 +276,13 @@ const handleEdit = (row) => {
   currentUserId.value = row.ID || row.id
 
   // 填充表单数据
-  form.username = row.username
-  form.status = row.status
-  form.password = ''
+  form.value.username = row.username
+  form.value.status = row.status
+  form.value.password = ''
 
   // 设置角色
   const userRoles = (row.roles || []).filter(r => r).map(r => r.ID || r.id)
-  form.roleIds = userRoles
+  form.value.roleIds = userRoles
 
   showModal.value = true
 }
@@ -298,8 +298,8 @@ const handleSave = async () => {
       roleIds: form.roleIds
     }
 
-    if (form.password) {
-      data.password = form.password
+    if (form.value.password) {
+      data.password = form.value.password
     }
 
     if (isEdit.value) {
@@ -330,11 +330,18 @@ const handleDelete = async (row) => {
   }
 }
 
+const handleAddUser = () => {
+  // 重置表单并设置为添加模式
+  resetForm()
+  isEdit.value = false
+  showModal.value = true
+}
+
 const resetForm = () => {
-  form.username = ''
-  form.password = ''
-  form.status = 1
-  form.roleIds = []
+  form.value.username = ''
+  form.value.password = ''
+  form.value.status = 1
+  form.value.roleIds = []
   isEdit.value = false
   currentUserId.value = null
 }
@@ -359,5 +366,25 @@ onMounted(() => {
 
 :deep(.n-select) {
   background-color: var(--n-color);
+}
+
+/* 状态标签样式增强 */
+:deep(.n-tag) {
+  transition: all 0.3s ease;
+}
+
+:deep(.n-tag:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 状态标签中的图标样式 */
+:deep(.n-tag .n-icon) {
+  margin-right: 4px;
+}
+
+/* 角色标签容器样式 */
+:deep(.n-space) {
+  flex-wrap: wrap;
 }
 </style>

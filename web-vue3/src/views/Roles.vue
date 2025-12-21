@@ -256,10 +256,43 @@ const loadRoles = async () => {
     try {
         const data = await roleAPI.getRoles({ name: searchName.value })
         roles.value = data
+        
+        // 加载每个角色的菜单和权限数量
+        await loadRoleCounts(data)
     } catch (error) {
         appStore.showError('加载角色列表失败')
     } finally {
         loading.value = false
+    }
+}
+
+const loadRoleCounts = async (rolesData) => {
+    try {
+        const menuCountsPromises = rolesData.map(async (role) => {
+            const roleId = role.ID || role.id
+            try {
+                const count = await roleAPI.getRoleMenusCount(roleId)
+                roleMenuCounts.value[roleId] = count
+            } catch (error) {
+                console.error(`获取角色${roleId}的菜单数量失败:`, error)
+                roleMenuCounts.value[roleId] = 0
+            }
+        })
+        
+        const apiPermissionCountsPromises = rolesData.map(async (role) => {
+            const roleId = role.ID || role.id
+            try {
+                const count = await roleAPI.getRoleApiPermissionsCount(roleId)
+                roleApiPermissionCounts.value[roleId] = count
+            } catch (error) {
+                console.error(`获取角色${roleId}的接口权限数量失败:`, error)
+                roleApiPermissionCounts.value[roleId] = 0
+            }
+        })
+        
+        await Promise.all([...menuCountsPromises, ...apiPermissionCountsPromises])
+    } catch (error) {
+        console.error('加载角色权限数量失败:', error)
     }
 }
 
@@ -335,3 +368,20 @@ onMounted(() => {
     loadRoles()
 })
 </script>
+
+<style scoped>
+/* 标签悬停效果 */
+:deep(.n-tag) {
+  transition: all 0.3s ease;
+}
+
+:deep(.n-tag:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 标签中的图标样式 */
+:deep(.n-tag .n-icon) {
+  margin-right: 4px;
+}
+</style>
