@@ -9,6 +9,7 @@ import (
 type ApiPermission struct {
 	gorm.Model
 	UUID        string       `gorm:"uniqueIndex;size:36;not null" json:"uuid"` // 唯一标识, UUID格式
+	Key         string       `gorm:"size:100;not null" json:"key"`             // 逻辑权限标识
 	Name        string       `gorm:"size:100;not null" json:"name"`            // 权限名称
 	Path        string       `gorm:"size:200;not null" json:"path"`            // 接口路径
 	Method      string       `gorm:"size:10;not null" json:"method"`           // HTTP方法

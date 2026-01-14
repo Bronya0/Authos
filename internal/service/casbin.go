@@ -6,11 +6,14 @@ import (
 	"github.com/casbin/casbin/v2"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"gorm.io/gorm"
+
+	"Authos/internal/model"
 )
 
 // CasbinService Casbin 服务
 type CasbinService struct {
 	Enforcer *casbin.Enforcer
+	DB       *gorm.DB
 }
 
 // NewCasbinService 创建 Casbin 服务实例
@@ -21,11 +24,14 @@ func NewCasbinService(db *gorm.DB) (*CasbinService, error) {
 		return nil, fmt.Errorf("failed to create casbin adapter: %w", err)
 	}
 
-	// 创建 Casbin 执行器
 	modelPath := "internal/middleware/model.conf"
 	enforcer, err := casbin.NewEnforcer(modelPath, adapter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create casbin enforcer: %w", err)
+		altModelPath := "../middleware/model.conf"
+		enforcer, err = casbin.NewEnforcer(altModelPath, adapter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create casbin enforcer: %w", err)
+		}
 	}
 
 	// 加载策略
@@ -35,6 +41,7 @@ func NewCasbinService(db *gorm.DB) (*CasbinService, error) {
 
 	return &CasbinService{
 		Enforcer: enforcer,
+		DB:       db,
 	}, nil
 }
 
@@ -47,8 +54,23 @@ type CheckPermissionReq struct {
 
 // CheckPermission 检查权限
 func (s *CasbinService) CheckPermission(userId uint, obj, act string) (bool, error) {
-	// 使用 keyMatch2 匹配器检查权限
-	return s.Enforcer.Enforce(fmt.Sprintf("user:%d", userId), obj, act)
+	var user model.User
+	if err := s.DB.Preload("Roles").First(&user, userId).Error; err != nil {
+		return false, err
+	}
+
+	for _, role := range user.Roles {
+		roleKey := fmt.Sprintf("role:%s", role.UUID)
+		allowed, err := s.Enforcer.Enforce(roleKey, obj, act)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // LoadPolicy 重新加载策略

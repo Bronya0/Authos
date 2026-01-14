@@ -5,6 +5,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"Authos/internal/model"
 	"Authos/internal/service"
 )
 
@@ -29,6 +30,11 @@ type CheckPermissionReq struct {
 	Act    string `json:"act" binding:"required"`
 }
 
+type CheckPermissionByKeyReq struct {
+	UserID     uint   `json:"userId" binding:"required"`
+	Permission string `json:"permission" binding:"required"`
+}
+
 // CheckPermission 检查权限
 func (h *AuthzHandler) CheckPermission(c echo.Context) error {
 	var req CheckPermissionReq
@@ -38,6 +44,23 @@ func (h *AuthzHandler) CheckPermission(c echo.Context) error {
 
 	// 调用 Casbin 检查权限
 	allowed, err := h.CasbinService.CheckPermission(req.UserID, req.Obj, req.Act)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to check permission"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"allowed": allowed,
+		"message": "Permission checked successfully",
+	})
+}
+
+func (h *AuthzHandler) CheckPermissionByKey(c echo.Context) error {
+	var req CheckPermissionByKeyReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
+	}
+
+	allowed, err := h.CasbinService.CheckPermission(req.UserID, req.Permission, model.HTTP_ALL)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to check permission"})
 	}

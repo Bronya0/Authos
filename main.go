@@ -132,6 +132,7 @@ func main() {
 
 		// 权限检查
 		api.POST("/check", authzHandler.CheckPermission)
+		api.POST("/auth/check-permission", authzHandler.CheckPermissionByKey)
 
 		// 用户导航菜单
 		api.GET("/user/nav", authzHandler.GetUserNav)

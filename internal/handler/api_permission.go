@@ -84,6 +84,7 @@ func (h *ApiPermissionHandler) CreateApiPermission(c echo.Context) error {
 	}
 
 	var req struct {
+		Key         string `json:"key"`
 		Name        string `json:"name"`
 		Path        string `json:"path"`
 		Method      string `json:"method"`
@@ -94,7 +95,7 @@ func (h *ApiPermissionHandler) CreateApiPermission(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "请求参数错误"})
 	}
 
-	permission, err := h.ApiPermissionService.CreateApiPermission(appID, req.Name, req.Path, req.Method, req.Description)
+	permission, err := h.ApiPermissionService.CreateApiPermission(appID, req.Key, req.Name, req.Path, req.Method, req.Description)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}
@@ -148,6 +149,7 @@ func (h *ApiPermissionHandler) UpdateApiPermission(c echo.Context) error {
 	}
 
 	var req struct {
+		Key         string `json:"key"`
 		Name        string `json:"name"`
 		Path        string `json:"path"`
 		Method      string `json:"method"`
@@ -158,7 +160,7 @@ func (h *ApiPermissionHandler) UpdateApiPermission(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "请求参数错误"})
 	}
 
-	permission, err := h.ApiPermissionService.UpdateApiPermission(uint(id), appID, req.Name, req.Path, req.Method, req.Description)
+	permission, err := h.ApiPermissionService.UpdateApiPermission(uint(id), appID, req.Key, req.Name, req.Path, req.Method, req.Description)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
 	}

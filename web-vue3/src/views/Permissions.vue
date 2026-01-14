@@ -29,6 +29,10 @@
     <n-modal v-model:show="showModal" :title="isEdit ? '编辑权限' : '添加权限'" preset="dialog" :show-icon="false"
       @after-leave="resetForm">
       <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" label-width="80px">
+        <n-form-item label="标识" path="key">
+          <n-input v-model:value="form.key" placeholder="例如 user:create，用于业务系统校验" />
+        </n-form-item>
+
         <n-form-item label="名称" path="name">
           <n-input v-model:value="form.name" placeholder="请输入权限名称" />
         </n-form-item>
@@ -92,6 +96,7 @@ const handleReset = () => {
 
 const formRef = ref()
 const form = reactive({
+  key: '',
   name: '',
   path: '',
   method: '',
@@ -99,6 +104,9 @@ const form = reactive({
 })
 
 const rules = {
+  key: [
+    { required: true, message: '请输入权限标识', trigger: 'blur' }
+  ],
   name: [
     { required: true, message: '请输入权限名称', trigger: 'blur' }
   ],
@@ -144,6 +152,10 @@ const columns = [
     key: 'id',
     width: 80,
     render: (row) => row.ID || row.id
+  },
+  {
+    title: '标识',
+    key: 'key'
   },
   {
     title: '名称',
@@ -242,6 +254,7 @@ const handleEdit = (row) => {
 
   // 填充表单数据
   form.name = row.name
+  form.key = row.key
   form.path = row.path
   form.method = row.method
   form.description = row.description || ''
@@ -255,6 +268,7 @@ const handleSave = async () => {
     saving.value = true
 
     const data = {
+      key: form.key,
       name: form.name,
       path: form.path,
       method: form.method,
@@ -291,6 +305,7 @@ const handleDelete = async (row) => {
 
 const resetForm = () => {
   form.name = ''
+  form.key = ''
   form.path = ''
   form.method = ''
   form.description = ''

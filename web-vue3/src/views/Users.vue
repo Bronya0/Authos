@@ -292,14 +292,16 @@ const handleSave = async () => {
     await formRef.value?.validate()
     saving.value = true
 
+    const { username, status, roleIds, password } = form.value
+
     const data = {
-      username: form.username,
-      status: form.status,
-      roleIds: form.roleIds
+      username,
+      status,
+      roleIds
     }
 
-    if (form.value.password) {
-      data.password = form.value.password
+    if (password) {
+      data.password = password
     }
 
     if (isEdit.value) {

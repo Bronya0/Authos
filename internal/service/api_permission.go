@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"strings"
 
 	"Authos/internal/model"
 
@@ -53,10 +52,9 @@ func (s *ApiPermissionService) GetApiPermissionByUUID(appID uint, uuid string) (
 }
 
 // CreateApiPermission 创建接口权限（按应用隔离）
-func (s *ApiPermissionService) CreateApiPermission(appID uint, name, path, method, description string) (*model.ApiPermission, error) {
-	// 验证参数
-	if name == "" || path == "" || method == "" {
-		return nil, fmt.Errorf("权限名称、接口路径和HTTP方法不能为空")
+func (s *ApiPermissionService) CreateApiPermission(appID uint, key, name, path, method, description string) (*model.ApiPermission, error) {
+	if key == "" || name == "" || path == "" || method == "" {
+		return nil, fmt.Errorf("权限标识、名称、接口路径和HTTP方法不能为空")
 	}
 
 	// 验证HTTP方法是否有效
@@ -72,14 +70,15 @@ func (s *ApiPermissionService) CreateApiPermission(appID uint, name, path, metho
 		return nil, fmt.Errorf("无效的HTTP方法: %s", method)
 	}
 
-	// 检查权限是否已存在（同一应用内）
+	// 检查权限标识是否已存在（同一应用内）
 	var existingPermission model.ApiPermission
-	if err := s.DB.Where("path = ? AND method = ? AND app_id = ?", path, method, appID).First(&existingPermission).Error; err == nil {
-		return nil, fmt.Errorf("接口权限已存在: %s %s", method, path)
+	if err := s.DB.Where("key = ? AND app_id = ?", key, appID).First(&existingPermission).Error; err == nil {
+		return nil, fmt.Errorf("权限标识已存在: %s", key)
 	}
 
 	// 创建权限
 	permission := model.ApiPermission{
+		Key:         key,
 		Name:        name,
 		Path:        path,
 		Method:      method,
@@ -95,12 +94,14 @@ func (s *ApiPermissionService) CreateApiPermission(appID uint, name, path, metho
 }
 
 // UpdateApiPermission 更新接口权限（按应用隔离）
-func (s *ApiPermissionService) UpdateApiPermission(id uint, appID uint, name, path, method, description string) (*model.ApiPermission, error) {
+func (s *ApiPermissionService) UpdateApiPermission(id uint, appID uint, key, name, path, method, description string) (*model.ApiPermission, error) {
 	// 获取现有权限
 	permission, err := s.GetApiPermission(id, appID)
 	if err != nil {
 		return nil, err
 	}
+
+	oldKey := permission.Key
 
 	// 验证HTTP方法是否有效
 	validMethods := model.GetAllHttpMethods()
@@ -115,13 +116,14 @@ func (s *ApiPermissionService) UpdateApiPermission(id uint, appID uint, name, pa
 		return nil, fmt.Errorf("无效的HTTP方法: %s", method)
 	}
 
-	// 检查权限是否已存在（排除当前权限）
+	// 检查权限标识是否已存在（排除当前权限）
 	var existingPermission model.ApiPermission
-	if err := s.DB.Where("path = ? AND method = ? AND id != ? AND app_id = ?", path, method, id, appID).First(&existingPermission).Error; err == nil {
-		return nil, fmt.Errorf("接口权限已存在: %s %s", method, path)
+	if err := s.DB.Where("key = ? AND id != ? AND app_id = ?", key, id, appID).First(&existingPermission).Error; err == nil {
+		return nil, fmt.Errorf("权限标识已存在: %s", key)
 	}
 
 	// 更新权限
+	permission.Key = key
 	permission.Name = name
 	permission.Path = path
 	permission.Method = method
@@ -129,6 +131,29 @@ func (s *ApiPermissionService) UpdateApiPermission(id uint, appID uint, name, pa
 
 	if err := s.DB.Save(permission).Error; err != nil {
 		return nil, fmt.Errorf("更新接口权限失败: %v", err)
+	}
+
+	if oldKey != key {
+		policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(1, oldKey)
+		for _, policy := range policies {
+			args := make([]interface{}, len(policy))
+			for i, v := range policy {
+				args[i] = v
+			}
+			_, _ = s.CasbinService.Enforcer.RemovePolicy(args...)
+			policy[1] = key
+			newArgs := make([]interface{}, len(policy))
+			for i, v := range policy {
+				newArgs[i] = v
+			}
+			_, err = s.CasbinService.Enforcer.AddPolicy(newArgs...)
+			if err != nil {
+				return nil, fmt.Errorf("更新权限策略失败: %v", err)
+			}
+		}
+		if err := s.CasbinService.Enforcer.LoadPolicy(); err != nil {
+			return nil, fmt.Errorf("重新加载权限策略失败: %v", err)
+		}
 	}
 
 	return permission, nil
@@ -143,7 +168,7 @@ func (s *ApiPermissionService) DeleteApiPermission(id uint, appID uint) error {
 	}
 
 	// 从Casbin中删除所有与此权限相关的策略
-	policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(1, permission.Path, permission.Method)
+	policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(1, permission.Key)
 	for _, policy := range policies {
 		// 将[]string转换为[]interface{}
 		args := make([]interface{}, len(policy))
@@ -173,7 +198,7 @@ func (s *ApiPermissionService) GetRolesForApiPermission(appID uint, permissionUU
 	}
 
 	// 获取所有拥有此权限的策略
-	policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(1, permission.Path, permission.Method)
+	policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(1, permission.Key)
 
 	var roleUUIDs []string
 	for _, policy := range policies {
@@ -205,13 +230,13 @@ func (s *ApiPermissionService) AddApiPermissionToRole(appID uint, roleUUID, perm
 
 	// 检查权限是否已存在
 	rolePrefix := fmt.Sprintf("role:%s", roleUUID)
-	hasPolicy, _ := s.CasbinService.Enforcer.HasPolicy(rolePrefix, permission.Path, permission.Method)
+	hasPolicy, _ := s.CasbinService.Enforcer.HasPolicy(rolePrefix, permission.Key, model.HTTP_ALL)
 	if hasPolicy {
 		return fmt.Errorf("角色已拥有此权限")
 	}
 
 	// 添加权限策略
-	_, err = s.CasbinService.Enforcer.AddPolicy(rolePrefix, permission.Path, permission.Method)
+	_, err = s.CasbinService.Enforcer.AddPolicy(rolePrefix, permission.Key, model.HTTP_ALL)
 	if err != nil {
 		return fmt.Errorf("添加权限策略失败: %v", err)
 	}
@@ -230,7 +255,7 @@ func (s *ApiPermissionService) RemoveApiPermissionFromRole(appID uint, roleUUID,
 
 	// 移除权限策略
 	rolePrefix := fmt.Sprintf("role:%s", roleUUID)
-	_, err = s.CasbinService.Enforcer.RemovePolicy(rolePrefix, permission.Path, permission.Method)
+	_, err = s.CasbinService.Enforcer.RemovePolicy(rolePrefix, permission.Key, model.HTTP_ALL)
 	if err != nil {
 		return fmt.Errorf("移除权限策略失败: %v", err)
 	}
@@ -245,38 +270,18 @@ func (s *ApiPermissionService) GetApiPermissionsForRole(appID uint, roleUUID str
 	rolePrefix := fmt.Sprintf("role:%s", roleUUID)
 	policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(0, rolePrefix)
 
-	var permissionPaths []struct {
-		Path   string
-		Method string
-	}
+	var permissionKeys []string
 
 	for _, policy := range policies {
 		if len(policy) >= 3 {
-			permissionPaths = append(permissionPaths, struct {
-				Path   string
-				Method string
-			}{
-				Path:   policy[1],
-				Method: policy[2],
-			})
+			permissionKeys = append(permissionKeys, policy[1])
 		}
 	}
 
 	// 查询权限信息
 	var permissions []model.ApiPermission
-	if len(permissionPaths) > 0 {
-		// 构建查询条件
-		var conditions []string
-		var args []interface{}
-
-		for _, pp := range permissionPaths {
-			conditions = append(conditions, "(path = ? AND method = ?)")
-			args = append(args, pp.Path, pp.Method)
-		}
-
-		// 使用 strings.Join 来组合条件
-		whereClause := strings.Join(conditions, " OR ")
-		if err := s.DB.Where(fmt.Sprintf("(%s)", whereClause), args...).Find(&permissions).Error; err != nil {
+	if len(permissionKeys) > 0 {
+		if err := s.DB.Where("key IN ?", permissionKeys).Find(&permissions).Error; err != nil {
 			return nil, err
 		}
 	}
