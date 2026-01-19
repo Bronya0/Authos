@@ -67,6 +67,7 @@ func autoMigrate(db *gorm.DB) error {
 		&model.Role{},
 		&model.Menu{},
 		&model.ApiPermission{},
+		&model.ConfigDictionary{},
 		&model.AuditLog{},
 		// CasbinRule 会被 Gorm Adapter 自动迁移
 	)

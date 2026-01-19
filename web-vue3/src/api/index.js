@@ -161,6 +161,14 @@ export const apiPermissionAPI = {
   removeApiPermissionFromRole: (roleUUID, data) => api.delete(`/v1/api-permissions/roles/${roleUUID}`, { data })
 }
 
+export const configDictionaryAPI = {
+  getConfigDictionaries: (params) => api.get('/v1/config-dictionaries', { params }),
+  getConfigDictionary: (id) => api.get(`/v1/config-dictionaries/${id}`),
+  createConfigDictionary: (data) => api.post('/v1/config-dictionaries', data),
+  updateConfigDictionary: (id, data) => api.put(`/v1/config-dictionaries/${id}`, data),
+  deleteConfigDictionary: (id) => api.delete(`/v1/config-dictionaries/${id}`)
+}
+
 export const applicationAPI = {
   getApplications: (params) => api.get('/v1/applications', { params }),
   getApplication: (id) => api.get(`/v1/applications/${id}`),

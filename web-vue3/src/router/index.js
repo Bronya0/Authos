@@ -67,6 +67,12 @@ const routes = [
         meta: { requiresAuth: true, title: '权限配置', icon: 'key' }
       },
       {
+        path: 'config-dictionaries',
+        name: 'ConfigDictionaries',
+        component: () => import('../views/ConfigDictionaries.vue'),
+        meta: { requiresAuth: true, title: '配置字典', icon: 'list' }
+      },
+      {
         path: 'audit-logs',
         name: 'AuditLogs',
         component: () => import('../views/AuditLogs.vue'),

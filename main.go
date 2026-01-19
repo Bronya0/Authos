@@ -70,6 +70,7 @@ func main() {
 	apiPermissionService := service.NewApiPermissionService(dbService.DB, casbinService, roleService)
 	applicationService := service.NewApplicationService(dbService.DB)
 	auditLogService := service.NewAuditLogService(dbService.DB)
+	configDictionaryService := service.NewConfigDictionaryService(dbService.DB)
 
 	// 初始化 JWT 配置
 	jwtConfig := utils.NewJWTConfig(jwtSecret, jwtExpireTime)
@@ -83,6 +84,7 @@ func main() {
 	applicationHandler := handler.NewApplicationHandler(applicationService)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogService)
 	authzHandler := handler.NewAuthzHandler(casbinService, menuService)
+	configDictionaryHandler := handler.NewConfigDictionaryHandler(configDictionaryService)
 
 	// 初始化 JWT 中间件
 	jwtMiddleware := customMiddleware.NewJWTMiddleware(jwtConfig)
@@ -188,6 +190,15 @@ func main() {
 			menus.GET("/:id", menuHandler.GetMenu)
 			menus.PUT("/:id", menuHandler.UpdateMenu)
 			menus.DELETE("/:id", menuHandler.DeleteMenu)
+		}
+
+		configDictionaries := api.Group("/config-dictionaries")
+		{
+			configDictionaries.POST("", configDictionaryHandler.CreateConfigDictionary)
+			configDictionaries.GET("", configDictionaryHandler.ListConfigDictionaries)
+			configDictionaries.GET("/:id", configDictionaryHandler.GetConfigDictionary)
+			configDictionaries.PUT("/:id", configDictionaryHandler.UpdateConfigDictionary)
+			configDictionaries.DELETE("/:id", configDictionaryHandler.DeleteConfigDictionary)
 		}
 
 		// 审计日志

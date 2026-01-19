@@ -140,6 +140,11 @@ const menuOptions = computed(() => {
         icon: () => h(NIcon, null, { default: () => h(KeyIcon) })
       },
       {
+        label: '配置字典',
+        key: 'ConfigDictionaries',
+        icon: () => h(NIcon, null, { default: () => h(ListIcon) })
+      },
+      {
         label: '审计日志',
         key: 'AuditLogs',
         icon: () => h(NIcon, null, { default: () => h(ListIcon) })
