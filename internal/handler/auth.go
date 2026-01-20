@@ -16,32 +16,48 @@ import (
 func getAppIDFromToken(c echo.Context) (uint, error) {
 
 	// 尝试从上下文获取 appID（JWT token）
+	var tokenAppID uint
 	appIDInterface := c.Get("appID")
 	if appIDInterface != nil {
-		fmt.Printf("getAppIDFromToken: appID interface type: %T, value: %v\n", appIDInterface, appIDInterface)
-
 		// 尝试类型断言
 		switch v := appIDInterface.(type) {
 		case uint:
-			return v, nil
+			tokenAppID = v
 		case float64:
-			return uint(v), nil
+			tokenAppID = uint(v)
 		case int:
-			return uint(v), nil
+			tokenAppID = uint(v)
 		default:
 			fmt.Printf("getAppIDFromToken: Type assertion failed for appID from token, actual type: %T\n", appIDInterface)
 		}
 	}
 
-	// 如果JWT中没有appID，尝试从请求头获取
+	// 尝试从请求头获取 appID
+	var headerAppID uint
 	appIDStr := c.Request().Header.Get("X-App-ID")
 	if appIDStr != "" {
-		var appID uint
-		if _, err := fmt.Sscanf(appIDStr, "%d", &appID); err == nil && appID > 0 {
-			fmt.Printf("getAppIDFromToken: Successfully got appID from header: %d\n", appID)
-			return appID, nil
+		if _, err := fmt.Sscanf(appIDStr, "%d", &headerAppID); err == nil && headerAppID > 0 {
+			fmt.Printf("getAppIDFromToken: Got appID from header: %d\n", headerAppID)
 		}
-		fmt.Printf("getAppIDFromToken: Invalid appID format in header: %s\n", appIDStr)
+	}
+
+	// 逻辑判断：
+	// 1. 如果 Token 中的 AppID 为 1 (系统管理员)，且 Header 中有指定的 AppID，则使用 Header 中的 AppID
+	// 2. 否则，优先使用 Token 中的 AppID
+	// 3. 如果都没有，则返回错误
+
+	if tokenAppID == 1 && headerAppID > 0 {
+		fmt.Printf("getAppIDFromToken: System admin switching context to appID: %d\n", headerAppID)
+		return headerAppID, nil
+	}
+
+	if tokenAppID > 0 {
+		return tokenAppID, nil
+	}
+
+	if headerAppID > 0 {
+		// 兼容逻辑：如果没有 Token 但有 Header (且未被鉴权中间件拦截)，则使用 Header
+		return headerAppID, nil
 	}
 
 	fmt.Printf("getAppIDFromToken: appID not found in token or header\n")
@@ -83,6 +99,14 @@ type SystemLoginRequest struct {
 type AppLoginRequest struct {
 	AppID     uint   `json:"appId" binding:"required"`
 	AppSecret string `json:"appSecret" binding:"required"`
+}
+
+// ProxyLoginRequest 代理登录请求
+type ProxyLoginRequest struct {
+	AppCode   string `json:"appCode" binding:"required"`
+	AppSecret string `json:"appSecret" binding:"required"`
+	Username  string `json:"username" binding:"required"`
+	Password  string `json:"password" binding:"required"`
 }
 
 // SystemLogin 系统管理员登录接口
@@ -186,6 +210,67 @@ func (h *AuthHandler) AppLogin(c echo.Context) error {
 		"token":   token,
 		"app":     app,
 		"message": "App login successful",
+	})
+}
+
+// ProxyLogin 代理登录接口（后端透传模式）
+func (h *AuthHandler) ProxyLogin(c echo.Context) error {
+	var req ProxyLoginRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
+	}
+
+	// 1. 验证应用身份 (AppCode + Secret)
+	app, err := h.ApplicationService.GetApplicationByCode(req.AppCode)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application code"})
+	}
+
+	if app.SecretKey != req.AppSecret {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application secret"})
+	}
+
+	if app.Status == 0 {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Application is disabled"})
+	}
+
+	// 2. 验证用户身份
+	user, err := h.UserService.GetUserByUsername(req.Username, app.ID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid username or password"})
+	}
+
+	if user.Status == 0 {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "User is disabled"})
+	}
+
+	// 验证密码
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid username or password"})
+	}
+
+	// 3. 生成 Token
+	token, err := h.JWTConfig.GenerateToken(user.ID, user.Username, app.ID, app.UUID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
+	}
+
+	// 4. 记录审计日志
+	h.AuditLogService.Record(&model.AuditLog{
+		AppID:    app.ID,
+		UserID:   user.ID,
+		Username: user.Username,
+		Action:   "PROXY_LOGIN",
+		Resource: "USER",
+		IP:       c.RealIP(),
+		Status:   1,
+	})
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"token":   token,
+		"user":    user,
+		"app":     app,
+		"message": "Proxy login successful",
 	})
 }
 

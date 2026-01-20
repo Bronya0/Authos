@@ -83,7 +83,7 @@ func main() {
 	apiPermissionHandler := handler.NewApiPermissionHandler(apiPermissionService)
 	applicationHandler := handler.NewApplicationHandler(applicationService)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogService)
-	authzHandler := handler.NewAuthzHandler(casbinService, menuService)
+	authzHandler := handler.NewAuthzHandler(casbinService, menuService, applicationService, jwtConfig)
 	configDictionaryHandler := handler.NewConfigDictionaryHandler(configDictionaryService)
 
 	// 初始化 JWT 中间件
@@ -116,6 +116,8 @@ func main() {
 		public.POST("/login", authHandler.Login)
 		public.POST("/system-login", authHandler.SystemLogin)
 		public.POST("/app-login", authHandler.AppLogin)
+		public.POST("/proxy-login", authHandler.ProxyLogin)                  // 新增：后端代理登录
+		public.POST("/check-access", authzHandler.CheckPermissionWithSecret) // 新增：统一鉴权
 		public.POST("/logout", authHandler.Logout)
 
 	}

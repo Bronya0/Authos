@@ -11,35 +11,31 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   config => {
-    // 系统管理员认证
     const systemToken = localStorage.getItem('systemToken')
-    if (systemToken) {
-      config.headers['X-System-Token'] = `Bearer ${systemToken}`
-    }
-    
-    // 应用认证
     const appToken = localStorage.getItem('appToken')
-    if (appToken) {
-      config.headers['X-App-Token'] = `Bearer ${appToken}`
-    }
-    
-    // 用户认证（多租户）
     const userToken = localStorage.getItem('userToken')
-    if (userToken) {
-      config.headers['Authorization'] = `Bearer ${userToken}`
-    }
-    
-    // 从localStorage获取应用ID并添加到请求头
-    const currentApp = localStorage.getItem('currentApp')
-    if (currentApp) {
-      try {
-        const appData = JSON.parse(currentApp)
-        if (appData.id) {
-          config.headers['X-App-ID'] = appData.id
+
+    // 统一使用 X-Authos-Token 头，避免与业务 Authorization 冲突
+    // 优先级：System > App > User
+    if (systemToken) {
+      config.headers['X-Authos-Token'] = `Bearer ${systemToken}`
+      
+      // 只有系统管理员模式下，才需要手动传递 X-App-ID 上下文
+      const currentApp = localStorage.getItem('currentApp')
+      if (currentApp) {
+        try {
+          const appData = JSON.parse(currentApp)
+          if (appData.id) {
+            config.headers['X-App-ID'] = appData.id
+          }
+        } catch (e) {
+          console.error('Failed to parse currentApp from localStorage', e)
         }
-      } catch (e) {
-        console.error('Failed to parse currentApp from localStorage', e)
       }
+    } else if (appToken) {
+      config.headers['X-Authos-Token'] = `Bearer ${appToken}`
+    } else if (userToken) {
+      config.headers['X-Authos-Token'] = `Bearer ${userToken}`
     }
     
     return config

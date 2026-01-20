@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, h } from 'vue'
+import { ref, reactive, computed, onMounted, h, watch } from 'vue'
 import { configDictionaryAPI } from '../api'
 import { useAppStore } from '../stores/app'
 import { Add, Create, Trash } from '@vicons/ionicons5'
@@ -60,6 +60,17 @@ import { NIcon, NButton, NSpace } from 'naive-ui'
 import { formatDate } from '../utils/format'
 
 const appStore = useAppStore()
+
+// 监听当前应用变化，重新加载数据
+watch(() => appStore.currentApp, (newVal, oldVal) => {
+  if (newVal?.id !== oldVal?.id) {
+    if (newVal) {
+      loadItems()
+    } else {
+      items.value = []
+    }
+  }
+})
 
 const items = ref([])
 const loading = ref(false)

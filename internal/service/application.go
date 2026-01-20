@@ -115,10 +115,59 @@ func (s *ApplicationService) DeleteApplication(id string) error {
 
 	fmt.Printf("Application found: %+v\n", app)
 
-	// 删除应用 - 使用Unscoped()确保真正删除记录，而不是软删除
-	result := s.DB.Unscoped().Delete(&model.Application{}, appID)
-	fmt.Printf("Delete result: %d rows affected\n", result.RowsAffected)
-	return result.Error
+	// 开启事务进行级联删除
+	return s.DB.Transaction(func(tx *gorm.DB) error {
+		// 1. 删除关联表数据 (User-Role, Role-Menu)
+		// 注意：由于SQLite/GORM可能没有建立严格的级联删除，手动清理更安全
+		if err := tx.Exec("DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE app_id = ?)", appID).Error; err != nil {
+			return fmt.Errorf("failed to delete user_roles: %w", err)
+		}
+		if err := tx.Exec("DELETE FROM role_menus WHERE role_id IN (SELECT id FROM roles WHERE app_id = ?)", appID).Error; err != nil {
+			return fmt.Errorf("failed to delete role_menus: %w", err)
+		}
+
+		// 2. 删除各实体表数据
+		// 使用 Unscoped() 确保物理删除
+
+		// 删除用户
+		if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&model.User{}).Error; err != nil {
+			return fmt.Errorf("failed to delete users: %w", err)
+		}
+
+		// 删除角色
+		if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&model.Role{}).Error; err != nil {
+			return fmt.Errorf("failed to delete roles: %w", err)
+		}
+
+		// 删除菜单
+		if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&model.Menu{}).Error; err != nil {
+			return fmt.Errorf("failed to delete menus: %w", err)
+		}
+
+		// 删除API权限
+		if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&model.ApiPermission{}).Error; err != nil {
+			return fmt.Errorf("failed to delete api permissions: %w", err)
+		}
+
+		// 删除配置字典
+		if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&model.ConfigDictionary{}).Error; err != nil {
+			return fmt.Errorf("failed to delete config dictionaries: %w", err)
+		}
+
+		// 删除审计日志 (可选，视需求而定，这里选择一并清理以保持干净)
+		if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&model.AuditLog{}).Error; err != nil {
+			return fmt.Errorf("failed to delete audit logs: %w", err)
+		}
+
+		// 3. 最后删除应用本身
+		result := tx.Unscoped().Delete(&model.Application{}, appID)
+		if result.Error != nil {
+			return fmt.Errorf("failed to delete application: %w", result.Error)
+		}
+		
+		fmt.Printf("Delete result: %d rows affected\n", result.RowsAffected)
+		return nil
+	})
 }
 
 // GetApplicationByID 根据ID获取应用

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 
 	"Authos/pkg/utils"
@@ -26,74 +27,89 @@ func NewJWTMiddleware(jwtConfig *utils.JWTConfig) *JWTMiddleware {
 func (j *JWTMiddleware) Middleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			// 尝试从多个请求头获取令牌
-			authHeader := c.Request().Header.Get("Authorization")
-			systemAuthHeader := c.Request().Header.Get("X-System-Token")
-			appAuthHeader := c.Request().Header.Get("X-App-Token")
-
-			var token string
-			var tokenType string
-
-			// 确定令牌类型和值
-			if appAuthHeader != "" {
-				// 应用令牌 - 优先级最高，因为它包含appID
-				parts := strings.SplitN(appAuthHeader, " ", 2)
-				if len(parts) == 2 && parts[0] == "Bearer" {
-					token = parts[1]
-					tokenType = "app"
+			// 1. 获取 Token (使用自定义头 X-Authos-Token 以避免与业务 Authorization 冲突)
+			authHeader := c.Request().Header.Get("X-Authos-Token")
+			
+			// 兼容性逻辑：如果 X-Authos-Token 为空，尝试从旧的 Header 获取 (为了平滑过渡)
+			if authHeader == "" {
+				if sysToken := c.Request().Header.Get("X-System-Token"); sysToken != "" {
+					authHeader = sysToken
+				} else if appToken := c.Request().Header.Get("X-App-Token"); appToken != "" {
+					authHeader = appToken
 				}
-			} else if systemAuthHeader != "" {
-				// 系统管理员令牌
-				parts := strings.SplitN(systemAuthHeader, " ", 2)
-				if len(parts) == 2 && parts[0] == "Bearer" {
-					token = parts[1]
+			}
+
+			if authHeader == "" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "X-Authos-Token header is required"})
+			}
+
+			// 去除 Bearer 前缀
+			tokenString := authHeader
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+
+			// 2. 解析 Token (使用 MapClaims 以支持多种类型)
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+				return []byte(j.JWTConfig.SecretKey), nil
+			})
+
+			if err != nil || !token.Valid {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid or expired token"})
+			}
+
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid token claims"})
+			}
+
+			// 3. 识别 Token 类型
+			tokenType, _ := claims["type"].(string)
+
+			// 如果没有 type 字段 (旧 Token)，尝试通过特征推断
+			if tokenType == "" {
+				if _, ok := claims["isAdmin"]; ok {
 					tokenType = "system"
-				}
-			} else if authHeader != "" {
-				// 传统令牌
-				parts := strings.SplitN(authHeader, " ", 2)
-				if len(parts) == 2 && parts[0] == "Bearer" {
-					token = parts[1]
+				} else if _, ok := claims["appCode"]; ok && claims["username"] == nil {
+					tokenType = "app"
+				} else {
 					tokenType = "user"
 				}
 			}
 
-			if token == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Authorization header is required"})
-			}
-
-			// 根据令牌类型验证
+			// 4. 根据类型设置上下文
 			switch tokenType {
 			case "system":
-				claims, err := j.JWTConfig.ParseSystemToken(token)
-				if err != nil {
-					return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid or expired system token"})
-				}
-				// 将系统管理员信息存储到上下文
+				username, _ := claims["username"].(string)
 				c.Set("isSystemAdmin", true)
-				c.Set("username", claims.Username)
+				c.Set("username", username)
+				
+				// System Admin 需要从 Header 获取目标 AppID
+				appIDStr := c.Request().Header.Get("X-App-ID")
+				if appIDStr != "" {
+					var appID uint
+					if _, err := fmt.Sscanf(appIDStr, "%d", &appID); err == nil && appID > 0 {
+						c.Set("appID", appID)
+					}
+				}
+
 			case "app":
-				fmt.Printf("JWT Middleware: Parsing app token: %s\n", token)
-				claims, err := j.JWTConfig.ParseAppToken(token)
-				if err != nil {
-					fmt.Printf("JWT Middleware: App token parse error: %v\n", err)
-					return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid or expired app token"})
-				}
-				fmt.Printf("JWT Middleware: App token parsed successfully, AppID: %d, AppCode: %s\n", claims.AppID, claims.AppCode)
-				// 将应用信息存储到上下文
+				appIDFloat, _ := claims["appId"].(float64) // JSON 数字通常解析为 float64
+				appCode, _ := claims["appCode"].(string)
+				
 				c.Set("isAppToken", true)
-				c.Set("appID", claims.AppID)
-				c.Set("appCode", claims.AppCode)
-				fmt.Printf("JWT Middleware: Context set - isAppToken: %v, appID: %d, appCode: %s\n", true, claims.AppID, claims.AppCode)
+				c.Set("appID", uint(appIDFloat))
+				c.Set("appCode", appCode)
+
 			case "user":
-				claims, err := j.JWTConfig.ParseToken(token)
-				if err != nil {
-					return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid or expired token"})
-				}
-				// 将用户信息存储到上下文
-				c.Set("userID", claims.UserID)
-				c.Set("username", claims.Username)
-				c.Set("appID", claims.AppID)
+				userIDFloat, _ := claims["userId"].(float64)
+				username, _ := claims["username"].(string)
+				appIDFloat, _ := claims["appId"].(float64)
+				
+				c.Set("userID", uint(userIDFloat))
+				c.Set("username", username)
+				c.Set("appID", uint(appIDFloat))
+
 			default:
 				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Unknown token type"})
 			}

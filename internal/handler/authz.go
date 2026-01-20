@@ -7,19 +7,24 @@ import (
 
 	"Authos/internal/model"
 	"Authos/internal/service"
+	"Authos/pkg/utils"
 )
 
 // AuthzHandler 权限处理器
 type AuthzHandler struct {
-	CasbinService *service.CasbinService
-	MenuService   *service.MenuService
+	CasbinService      *service.CasbinService
+	MenuService        *service.MenuService
+	ApplicationService *service.ApplicationService
+	JWTConfig          *utils.JWTConfig
 }
 
 // NewAuthzHandler 创建权限处理器实例
-func NewAuthzHandler(casbinService *service.CasbinService, menuService *service.MenuService) *AuthzHandler {
+func NewAuthzHandler(casbinService *service.CasbinService, menuService *service.MenuService, applicationService *service.ApplicationService, jwtConfig *utils.JWTConfig) *AuthzHandler {
 	return &AuthzHandler{
-		CasbinService: casbinService,
-		MenuService:   menuService,
+		CasbinService:      casbinService,
+		MenuService:        menuService,
+		ApplicationService: applicationService,
+		JWTConfig:          jwtConfig,
 	}
 }
 
@@ -50,6 +55,60 @@ func (h *AuthzHandler) CheckPermission(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"allowed": allowed,
+		"message": "Permission checked successfully",
+	})
+}
+
+// CheckPermissionWithSecretReq 统一鉴权请求（带Secret）
+type CheckPermissionWithSecretReq struct {
+	AppCode   string `json:"appCode" binding:"required"`
+	AppSecret string `json:"appSecret" binding:"required"`
+	Token     string `json:"token" binding:"required"`
+	Obj       string `json:"obj" binding:"required"` // 访问路径
+	Act       string `json:"act" binding:"required"` // 访问方法
+}
+
+// CheckPermissionWithSecret 统一鉴权接口
+func (h *AuthzHandler) CheckPermissionWithSecret(c echo.Context) error {
+	var req CheckPermissionWithSecretReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid request"})
+	}
+
+	// 1. 验证应用身份
+	app, err := h.ApplicationService.GetApplicationByCode(req.AppCode)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application code"})
+	}
+
+	if app.SecretKey != req.AppSecret {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application secret"})
+	}
+
+	if app.Status == 0 {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Application is disabled"})
+	}
+
+	// 2. 解析并验证 Token
+	claims, err := h.JWTConfig.ParseToken(req.Token)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid token"})
+	}
+
+	// 验证 Token 是否属于该应用
+	if claims.AppID != app.ID {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token does not belong to this application"})
+	}
+
+	// 3. 检查 Casbin 权限
+	allowed, err := h.CasbinService.CheckPermission(claims.UserID, req.Obj, req.Act)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to check permission"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"allowed": allowed,
+		"userId":  claims.UserID,
 		"message": "Permission checked successfully",
 	})
 }
