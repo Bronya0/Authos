@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -12,19 +13,21 @@ import (
 
 // AuthzHandler 权限处理器
 type AuthzHandler struct {
-	CasbinService      *service.CasbinService
-	MenuService        *service.MenuService
-	ApplicationService *service.ApplicationService
-	JWTConfig          *utils.JWTConfig
+	CasbinService        *service.CasbinService
+	MenuService          *service.MenuService
+	ApplicationService   *service.ApplicationService
+	ApiPermissionService *service.ApiPermissionService
+	JWTConfig            *utils.JWTConfig
 }
 
 // NewAuthzHandler 创建权限处理器实例
-func NewAuthzHandler(casbinService *service.CasbinService, menuService *service.MenuService, applicationService *service.ApplicationService, jwtConfig *utils.JWTConfig) *AuthzHandler {
+func NewAuthzHandler(casbinService *service.CasbinService, menuService *service.MenuService, applicationService *service.ApplicationService, apiPermissionService *service.ApiPermissionService, jwtConfig *utils.JWTConfig) *AuthzHandler {
 	return &AuthzHandler{
-		CasbinService:      casbinService,
-		MenuService:        menuService,
-		ApplicationService: applicationService,
-		JWTConfig:          jwtConfig,
+		CasbinService:        casbinService,
+		MenuService:          menuService,
+		ApplicationService:   applicationService,
+		ApiPermissionService: apiPermissionService,
+		JWTConfig:            jwtConfig,
 	}
 }
 
@@ -100,8 +103,21 @@ func (h *AuthzHandler) CheckPermissionWithSecret(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token does not belong to this application"})
 	}
 
-	// 3. 检查 Casbin 权限
-	allowed, err := h.CasbinService.CheckPermission(claims.UserID, req.Obj, req.Act)
+	// 3. 根据路径和方法解析对应的接口权限（支持 * 通配方法）
+	permission, err := h.ApiPermissionService.GetApiPermissionByPathAndMethod(app.ID, req.Obj, req.Act)
+	if err != nil {
+		// 如果未找到对应权限，直接视为无权限
+		log.Printf("permission not found for appID=%d path=%s method=%s: %v", app.ID, req.Obj, req.Act, err)
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"allowed": false,
+			"userId":  claims.UserID,
+			"message": "Permission not found",
+		})
+	}
+
+	// 4. 使用权限标识 + 请求方法 交给 Casbin 检查（策略里方法为 * 时也可匹配）
+	log.Printf("Checking permission for userID: %d, key: %s, path: %s, act: %s", claims.UserID, permission.Key, req.Obj, req.Act)
+	allowed, err := h.CasbinService.CheckPermission(claims.UserID, permission.Key, req.Act)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to check permission"})
 	}

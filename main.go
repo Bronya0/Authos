@@ -83,7 +83,7 @@ func main() {
 	apiPermissionHandler := handler.NewApiPermissionHandler(apiPermissionService)
 	applicationHandler := handler.NewApplicationHandler(applicationService)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogService)
-	authzHandler := handler.NewAuthzHandler(casbinService, menuService, applicationService, jwtConfig)
+	authzHandler := handler.NewAuthzHandler(casbinService, menuService, applicationService, apiPermissionService, jwtConfig)
 	configDictionaryHandler := handler.NewConfigDictionaryHandler(configDictionaryService)
 
 	// 初始化 JWT 中间件

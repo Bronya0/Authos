@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"Authos/internal/model"
 
@@ -49,6 +50,68 @@ func (s *ApiPermissionService) GetApiPermissionByUUID(appID uint, uuid string) (
 		return nil, err
 	}
 	return &permission, nil
+}
+
+// GetApiPermissionByPathAndMethod 根据路径和方法获取接口权限（支持前缀匹配，优先具体方法，其次 *）（按应用隔离）
+func (s *ApiPermissionService) GetApiPermissionByPathAndMethod(appID uint, path, method string) (*model.ApiPermission, error) {
+	// 统一规范路径，避免尾部斜杠造成的不一致
+	reqPath := strings.TrimRight(path, "/")
+	if reqPath == "" {
+		reqPath = "/"
+	}
+
+	var permissions []model.ApiPermission
+
+	// 一次性查出当前应用下当前方法和 * 方法的所有配置，减少多次 IO
+	if err := s.DB.Where("app_id = ? AND method IN ?",
+		appID,
+		[]string{method, model.HTTP_ALL},
+	).Find(&permissions).Error; err != nil {
+		return nil, fmt.Errorf("查询接口权限失败: %v", err)
+	}
+
+	var (
+		bestMatch       *model.ApiPermission
+		bestPathLength  int
+		bestMethodScore int // 2: 精确方法; 1: HTTP_ALL
+	)
+
+	for i := range permissions {
+		p := &permissions[i]
+		cfgPath := strings.TrimRight(p.Path, "/")
+		if cfgPath == "" {
+			cfgPath = "/"
+		}
+
+		// 路径前缀匹配：配置的 path 必须是请求 path 的前缀
+		if !strings.HasPrefix(reqPath, cfgPath) {
+			continue
+		}
+
+		// method 匹配优先级：先精确方法，再 HTTP_ALL（*）
+		methodScore := 0
+		if p.Method == method {
+			methodScore = 2
+		} else if p.Method == model.HTTP_ALL {
+			methodScore = 1
+		}
+		if methodScore == 0 {
+			continue
+		}
+
+		// 选择更长的前缀（更具体的路径），并且在相同前缀长度下优先方法更精确
+		if len(cfgPath) > bestPathLength || (len(cfgPath) == bestPathLength && methodScore > bestMethodScore) {
+			bestMatch = p
+			bestPathLength = len(cfgPath)
+			bestMethodScore = methodScore
+		}
+	}
+
+	if bestMatch == nil {
+		return nil, fmt.Errorf("接口权限未找到: path=%s method=%s", path, method)
+	}
+
+	return bestMatch, nil
 }
 
 // CreateApiPermission 创建接口权限（按应用隔离）
