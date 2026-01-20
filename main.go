@@ -1,8 +1,11 @@
 package main
 
 import (
+	"embed"
+	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -41,10 +44,8 @@ func corsConfig() echo.MiddlewareFunc {
 	})
 }
 
-// 预留代码：使用 embed.FS 托管前端构建产物
-// 假设前端构建产物在 web/dist 目录下
-//
-// var webFS embed.FS
+//go:embed web-vue3/dist
+var embeddedDist embed.FS
 
 func main() {
 	// 配置信息
@@ -106,8 +107,36 @@ func main() {
 	e.Use(echoMiddleware.Recover())
 	e.Use(corsConfig())
 
-	// 静态文件服务 - 托管前端构建产物
-	// e.StaticFS("/", webFS)
+	// 静态文件服务 - 托管前端构建产物（内嵌到二进制）
+	// 注意：需要先在 web-vue3 目录执行构建命令生成 dist 目录
+	if distFS, err := fs.Sub(embeddedDist, "web-vue3/dist"); err != nil {
+		// 前端构建资源不存在时仅提供 API 服务
+		log.Printf("frontend dist not embedded, only API will be available: %v", err)
+	} else {
+		fileServer := http.FileServer(http.FS(distFS))
+
+		// 通用静态资源路由，排除 /api/ 前缀，兼容 SPA 前端路由
+		e.GET("/*", func(c echo.Context) error {
+			path := c.Request().URL.Path
+			// API 路由直接交给后面的分组处理
+			if strings.HasPrefix(path, "/api/") {
+				return echo.ErrNotFound
+			}
+
+			trimmed := strings.TrimPrefix(path, "/")
+			if trimmed == "" {
+				trimmed = "index.html"
+			}
+
+			// 如果不存在对应静态文件，则回退到 index.html（支持前端 history 路由）
+			if _, err := distFS.Open(trimmed); err != nil {
+				c.Request().URL.Path = "/"
+			}
+
+			fileServer.ServeHTTP(c.Response(), c.Request())
+			return nil
+		})
+	}
 
 	// 公共路由
 	public := e.Group("/api/public")
