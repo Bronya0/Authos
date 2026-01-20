@@ -244,16 +244,28 @@ func (h *RoleHandler) ListRoles(c echo.Context) error {
 
 		// API 权限信息 (通过 Casbin)
 		roleKey := fmt.Sprintf("role:%s", role.UUID)
-		policies, _ := h.RoleService.CasbinService.Enforcer.GetFilteredPolicy(0, roleKey)
-		role.ApiPermCount = len(policies)
+		if h.RoleService.CasbinService != nil && h.RoleService.CasbinService.Enforcer != nil {
+			policies, _ := h.RoleService.CasbinService.Enforcer.GetFilteredPolicy(0, roleKey)
+			role.ApiPermCount = len(policies)
 
-		apiPreviewCount := 3
-		if role.ApiPermCount < apiPreviewCount {
-			apiPreviewCount = role.ApiPermCount
-		}
-		role.ApiPermPreview = make([]string, 0, apiPreviewCount)
-		for i := 0; i < apiPreviewCount; i++ {
-			role.ApiPermPreview = append(role.ApiPermPreview, fmt.Sprintf("%s %s", policies[i][2], policies[i][1]))
+			apiPreviewCount := 3
+			if role.ApiPermCount < apiPreviewCount {
+				apiPreviewCount = role.ApiPermCount
+			}
+			role.ApiPermPreview = make([]string, 0, apiPreviewCount)
+			for i := 0; i < apiPreviewCount; i++ {
+				// 检查 policies[i] 的长度，防止索引越界
+				if len(policies[i]) > 2 {
+					role.ApiPermPreview = append(role.ApiPermPreview, fmt.Sprintf("%s %s", policies[i][2], policies[i][1]))
+				} else if len(policies[i]) > 1 {
+					role.ApiPermPreview = append(role.ApiPermPreview, policies[i][1])
+				}
+			}
+		} else {
+			// Casbin 服务未初始化，记录日志并跳过权限信息
+			log.Printf("Warning: CasbinService or Enforcer is nil when listing roles")
+			role.ApiPermCount = 0
+			role.ApiPermPreview = []string{}
 		}
 	}
 

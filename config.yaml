@@ -1,0 +1,10 @@
+server:
+  port: "8099"
+
+log:
+  dir: "logs"
+  filename: "authos.log"
+
+system:
+  adminUsername: "admin"
+  adminPassword: "123456" # 建议修改此默认密码

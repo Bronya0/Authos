@@ -1,12 +1,10 @@
 package service
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -24,7 +22,7 @@ type DBService struct {
 }
 
 // NewDBService 创建数据库服务实例
-func NewDBService() (*DBService, error) {
+func NewDBService(config *Config) (*DBService, error) {
 	// 数据库文件路径
 	dbPath := "auth.db"
 
@@ -41,16 +39,25 @@ func NewDBService() (*DBService, error) {
 		Logger: newLogger,
 	})
 	if err != nil {
+		if Log != nil {
+			Log.Errorf("failed to connect database: %v", err)
+		}
 		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
 
 	// 自动迁移模型
 	if err := autoMigrate(db); err != nil {
+		if Log != nil {
+			Log.Errorf("failed to auto migrate: %v", err)
+		}
 		return nil, fmt.Errorf("failed to auto migrate: %w", err)
 	}
 
 	// 初始化种子数据
-	if err := seedData(db); err != nil {
+	if err := seedData(db, config); err != nil {
+		if Log != nil {
+			Log.Errorf("failed to seed data: %v", err)
+		}
 		return nil, fmt.Errorf("failed to seed data: %w", err)
 	}
 
@@ -74,7 +81,7 @@ func autoMigrate(db *gorm.DB) error {
 }
 
 // seedData 初始化种子数据
-func seedData(db *gorm.DB) error {
+func seedData(db *gorm.DB, config *Config) error {
 	// 检查是否已经有数据
 	var appCount int64
 	db.Model(&model.Application{}).Count(&appCount)
@@ -113,45 +120,20 @@ func seedData(db *gorm.DB) error {
 		return err
 	}
 
-	// 交互式创建管理员账户
+	// 获取管理员账户配置
 	var adminUsername, adminPassword string
 
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Println("========================================")
-	fmt.Println("检测到没有管理员账户，请选择创建方式：")
-	fmt.Println("1. 自动生成 (默认)")
-	fmt.Println("2. 手动输入")
-	fmt.Print("请输入选项 (1/2): ")
-
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
-
-	if choice == "2" {
-		// 手动输入
-		for {
-			fmt.Print("请输入管理员用户名 (默认为 admin): ")
-			inputUsername, _ := reader.ReadString('\n')
-			inputUsername = strings.TrimSpace(inputUsername)
-			if inputUsername == "" {
-				adminUsername = "admin"
-			} else {
-				adminUsername = inputUsername
-			}
-
-			fmt.Print("请输入管理员密码: ")
-			inputPassword, _ := reader.ReadString('\n')
-			inputPassword = strings.TrimSpace(inputPassword)
-			if inputPassword == "" {
-				fmt.Println("密码不能为空，请重新输入")
-				continue
-			}
-			adminPassword = inputPassword
-			break
-		}
+	// 优先使用配置文件中的设置
+	if config != nil && config.System.AdminUsername != "" {
+		adminUsername = config.System.AdminUsername
 	} else {
-		// 自动生成
 		adminUsername = "admin"
+	}
+
+	if config != nil && config.System.AdminPassword != "" {
+		adminPassword = config.System.AdminPassword
+	} else {
+		// 如果配置文件未设置密码，则自动生成
 		adminPassword = generateSecurePassword()
 	}
 
@@ -175,10 +157,10 @@ func seedData(db *gorm.DB) error {
 	log.Printf("========================================")
 	log.Printf("初始管理员账户已创建")
 	log.Printf("用户名: %s", adminUsername)
-	if choice != "2" {
-		log.Printf("密码: %s", adminPassword)
+	if config != nil && config.System.AdminPassword != "" {
+		log.Printf("密码: %s (来自配置文件)", adminPassword)
 	} else {
-		log.Printf("密码: (已手动设置)")
+		log.Printf("密码: %s (自动生成)", adminPassword)
 	}
 	log.Printf("========================================")
 

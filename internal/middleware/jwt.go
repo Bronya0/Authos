@@ -8,16 +8,16 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 
-	"Authos/pkg/utils"
+	"Authos/internal/service"
 )
 
 // JWTMiddleware JWT 认证中间件
 type JWTMiddleware struct {
-	JWTConfig *utils.JWTConfig
+	JWTConfig *service.JWTConfig
 }
 
 // NewJWTMiddleware 创建 JWT 中间件实例
-func NewJWTMiddleware(jwtConfig *utils.JWTConfig) *JWTMiddleware {
+func NewJWTMiddleware(jwtConfig *service.JWTConfig) *JWTMiddleware {
 	return &JWTMiddleware{
 		JWTConfig: jwtConfig,
 	}

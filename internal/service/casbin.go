@@ -24,14 +24,11 @@ func NewCasbinService(db *gorm.DB) (*CasbinService, error) {
 		return nil, fmt.Errorf("failed to create casbin adapter: %w", err)
 	}
 
-	modelPath := "internal/middleware/model.conf"
+	// 优先在根目录查找 model.conf
+	modelPath := "model.conf"
 	enforcer, err := casbin.NewEnforcer(modelPath, adapter)
 	if err != nil {
-		altModelPath := "../middleware/model.conf"
-		enforcer, err = casbin.NewEnforcer(altModelPath, adapter)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create casbin enforcer: %w", err)
-		}
+		return nil, fmt.Errorf("failed to create casbin enforcer:%s %w", modelPath, err)
 	}
 
 	// 加载策略

@@ -1,11 +1,9 @@
 package main
 
 import (
-	"embed"
-	"io/fs"
 	"log"
 	"net/http"
-	"strings"
+	"path/filepath"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -14,7 +12,6 @@ import (
 	"Authos/internal/handler"
 	customMiddleware "Authos/internal/middleware"
 	"Authos/internal/service"
-	"Authos/pkg/utils"
 )
 
 // 跨域中间件配置
@@ -44,24 +41,31 @@ func corsConfig() echo.MiddlewareFunc {
 	})
 }
 
-//go:embed web-vue3/dist
-var embeddedDist embed.FS
-
 func main() {
+	// 加载配置
+	cfg, err := service.LoadConfig("config.yaml")
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// 初始化日志
+	logPath := filepath.Join(cfg.Log.Dir, cfg.Log.Filename)
+	service.InitGlobalLogger(logPath)
+
 	// 配置信息
-	jwtSecret := "authos-secret-key" // 实际部署时应使用环境变量
+	jwtSecret := "authos-secret-key1212" // 实际部署时应使用环境变量
 	jwtExpireTime := 24 * time.Hour
 
 	// 初始化数据库服务
-	dbService, err := service.NewDBService()
+	dbService, err := service.NewDBService(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize database service: %v", err)
+		service.Log.Fatalf("Failed to initialize database: %v", err)
 	}
 
 	// 初始化 Casbin 服务
 	casbinService, err := service.NewCasbinService(dbService.DB)
 	if err != nil {
-		log.Fatalf("Failed to initialize casbin service: %v", err)
+		service.Log.Fatalf("Failed to initialize casbin service: %v", err)
 	}
 
 	// 初始化各种服务
@@ -74,7 +78,7 @@ func main() {
 	configDictionaryService := service.NewConfigDictionaryService(dbService.DB)
 
 	// 初始化 JWT 配置
-	jwtConfig := utils.NewJWTConfig(jwtSecret, jwtExpireTime)
+	jwtConfig := service.NewJWTConfig(jwtSecret, jwtExpireTime)
 
 	// 初始化 HTTP 处理器
 	authHandler := handler.NewAuthHandler(userService, applicationService, auditLogService, jwtConfig)
@@ -95,48 +99,21 @@ func main() {
 
 	// 配置中间件
 	e.Use(echoMiddleware.RequestLoggerWithConfig(echoMiddleware.RequestLoggerConfig{
-		LogURI:    true,
-		LogStatus: true,
-		LogHost:   true,
-		LogMethod: true,
+		LogURI:     true,
+		LogStatus:  true,
+		LogHost:    true,
+		LogMethod:  true,
+		LogLatency: true,
 		LogValuesFunc: func(c echo.Context, v echoMiddleware.RequestLoggerValues) error {
-			log.Printf("%s %s %s %d", v.Host, v.Method, v.URI, v.Status)
+			service.Log.Infof("%s %s %s %d %v", v.Host, v.Method, v.URI, v.Status, v.Latency)
 			return nil
 		},
 	}))
 	e.Use(echoMiddleware.Recover())
 	e.Use(corsConfig())
 
-	// 静态文件服务 - 托管前端构建产物（内嵌到二进制）
-	// 注意：需要先在 web-vue3 目录执行构建命令生成 dist 目录
-	if distFS, err := fs.Sub(embeddedDist, "web-vue3/dist"); err != nil {
-		// 前端构建资源不存在时仅提供 API 服务
-		log.Printf("frontend dist not embedded, only API will be available: %v", err)
-	} else {
-		fileServer := http.FileServer(http.FS(distFS))
-
-		// 通用静态资源路由，排除 /api/ 前缀，兼容 SPA 前端路由
-		e.GET("/*", func(c echo.Context) error {
-			path := c.Request().URL.Path
-			// API 路由直接交给后面的分组处理
-			if strings.HasPrefix(path, "/api/") {
-				return echo.ErrNotFound
-			}
-
-			trimmed := strings.TrimPrefix(path, "/")
-			if trimmed == "" {
-				trimmed = "index.html"
-			}
-
-			// 如果不存在对应静态文件，则回退到 index.html（支持前端 history 路由）
-			if _, err := distFS.Open(trimmed); err != nil {
-				c.Request().URL.Path = "/"
-			}
-
-			fileServer.ServeHTTP(c.Response(), c.Request())
-			return nil
-		})
-	}
+	// 静态文件服务（具体实现通过 registerStatic 抽象，支持嵌入或外部静态目录）
+	registerStatic(e)
 
 	// 公共路由
 	public := e.Group("/api/public")
@@ -238,9 +215,9 @@ func main() {
 	}
 
 	// 启动服务器
-	serverAddr := ":8080"
-	log.Printf("Server starting on %s", serverAddr)
+	serverAddr := ":" + cfg.Server.Port
+	service.Log.Infof("Server starting on %s", serverAddr)
 	if err := e.Start(serverAddr); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Failed to start server: %v", err)
+		service.Log.Fatalf("Failed to start server: %v", err)
 	}
 }

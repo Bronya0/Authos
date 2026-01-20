@@ -8,7 +8,6 @@ import (
 
 	"Authos/internal/model"
 	"Authos/internal/service"
-	"Authos/pkg/utils"
 )
 
 // AuthzHandler 权限处理器
@@ -17,11 +16,11 @@ type AuthzHandler struct {
 	MenuService          *service.MenuService
 	ApplicationService   *service.ApplicationService
 	ApiPermissionService *service.ApiPermissionService
-	JWTConfig            *utils.JWTConfig
+	JWTConfig            *service.JWTConfig
 }
 
 // NewAuthzHandler 创建权限处理器实例
-func NewAuthzHandler(casbinService *service.CasbinService, menuService *service.MenuService, applicationService *service.ApplicationService, apiPermissionService *service.ApiPermissionService, jwtConfig *utils.JWTConfig) *AuthzHandler {
+func NewAuthzHandler(casbinService *service.CasbinService, menuService *service.MenuService, applicationService *service.ApplicationService, apiPermissionService *service.ApiPermissionService, jwtConfig *service.JWTConfig) *AuthzHandler {
 	return &AuthzHandler{
 		CasbinService:        casbinService,
 		MenuService:          menuService,

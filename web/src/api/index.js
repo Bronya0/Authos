@@ -62,8 +62,7 @@ api.interceptors.response.use(
       localStorage.removeItem('currentApp')
       localStorage.removeItem('userToken')
       
-      // 重定向到系统登录页面
-      window.location.href = '/system-login'
+      window.location.href = '/authos/system-login'
     }
     return Promise.reject(error)
   }

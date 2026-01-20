@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,7 +65,7 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 
 	if err := h.UserService.CreateUser(user); err != nil {
 		// 记录详细错误信息
-		log.Printf("Failed to create user: %v", err)
+		service.Log.Errorf("Failed to create user: %v, username=%s, appID=%d", err, user.Username, user.AppID)
 
 		// 根据错误类型返回不同的错误信息
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -149,6 +148,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 
 	// 更新用户信息
 	if err := h.UserService.UpdateUser(user); err != nil {
+		service.Log.Errorf("Failed to update user: %v, userID=%d, username=%s", err, user.ID, user.Username)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update user"})
 	}
 
@@ -187,6 +187,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	// 如果提供了密码，则更新密码
 	if req.Password != "" {
 		if err := h.UserService.UpdateUserPassword(uint(id), req.Password); err != nil {
+			service.Log.Errorf("Failed to update user password: %v, userID=%d", err, id)
 			return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update password"})
 		}
 	}

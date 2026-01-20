@@ -17,6 +17,10 @@ const routes = [
     path: '/login',
     redirect: '/system-login'
   },
+    {
+    path: '/',
+    redirect: '/system-login'
+  },
   {
     path: '/app-selection',
     name: 'AppSelection',
@@ -90,33 +94,33 @@ const routes = [
 
 // 创建路由实例
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory('/authos/'),
   routes
 })
 
 // 路由守卫 - 支持多级认证
 router.beforeEach((to, from, next) => {
   // 检查是否需要系统管理员认证
-  if (to.meta.requiresSystemAuth) {
+    if (to.meta.requiresSystemAuth) {
     const systemToken = localStorage.getItem('systemToken')
     if (!systemToken) {
-      next('/system-login')
+        next('/authos/system-login')
       return
     }
   }
   
   // 检查是否需要完整认证（系统+应用）
-  if (to.meta.requiresAuth) {
+    if (to.meta.requiresAuth) {
     const systemToken = localStorage.getItem('systemToken')
     const appToken = localStorage.getItem('appToken')
     
     if (!systemToken) {
-      next('/system-login')
+        next('/authos/system-login')
       return
     }
     
     if (!appToken) {
-      next('/app-selection')
+        next('/authos/app-selection')
       return
     }
   }

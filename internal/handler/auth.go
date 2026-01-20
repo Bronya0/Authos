@@ -9,7 +9,6 @@ import (
 
 	"Authos/internal/model"
 	"Authos/internal/service"
-	"Authos/pkg/utils"
 )
 
 // getAppIDFromToken 从 JWT token 或请求头中获取应用ID
@@ -69,11 +68,11 @@ type AuthHandler struct {
 	UserService        *service.UserService
 	ApplicationService *service.ApplicationService
 	AuditLogService    *service.AuditLogService
-	JWTConfig          *utils.JWTConfig
+	JWTConfig          *service.JWTConfig
 }
 
 // NewAuthHandler 创建认证处理器实例
-func NewAuthHandler(userService *service.UserService, applicationService *service.ApplicationService, auditLogService *service.AuditLogService, jwtConfig *utils.JWTConfig) *AuthHandler {
+func NewAuthHandler(userService *service.UserService, applicationService *service.ApplicationService, auditLogService *service.AuditLogService, jwtConfig *service.JWTConfig) *AuthHandler {
 	return &AuthHandler{
 		UserService:        userService,
 		ApplicationService: applicationService,
@@ -123,25 +122,27 @@ func (h *AuthHandler) SystemLogin(c echo.Context) error {
 	// 系统管理员不与特定应用关联，appID为1（系统默认应用）
 	user, err := h.UserService.GetUserByUsernameForSystem(req.Username)
 	if err != nil {
-		fmt.Printf("SystemLogin: user not found or not admin: %v\n", err)
+		service.Log.Errorf("SystemLogin: user not found or not admin: %v, username=%s", err, req.Username)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid admin credentials"})
 	}
 
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		fmt.Printf("SystemLogin: password mismatch\n")
+		service.Log.Errorf("SystemLogin: password mismatch, username=%s", req.Username)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid admin credentials"})
 	}
 
 	// 获取应用信息（使用user的AppID）
 	var app model.Application
 	if err := h.UserService.DB.First(&app, user.AppID).Error; err != nil {
+		service.Log.Errorf("SystemLogin: Application not found, appID=%d", user.AppID)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Application not found"})
 	}
 
 	// 生成系统管理员JWT令牌（包含应用信息）
 	token, err := h.JWTConfig.GenerateToken(user.ID, user.Username, app.ID, app.UUID)
 	if err != nil {
+		service.Log.Errorf("SystemLogin: Failed to generate token: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
 
@@ -178,22 +179,26 @@ func (h *AuthHandler) AppLogin(c echo.Context) error {
 	// 获取应用信息（通过UUID）
 	app, err := h.ApplicationService.GetApplicationByUUID(req.AppUUID)
 	if err != nil {
+		service.Log.Errorf("AppLogin: Invalid application UUID: %v, appUUID=%s", err, req.AppUUID)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application UUID"})
 	}
 
 	// 检查应用密钥
 	if app.SecretKey != req.AppSecret {
+		service.Log.Warnf("AppLogin: Invalid application secret, appUUID=%s", req.AppUUID)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application secret"})
 	}
 
 	// 检查应用状态
 	if app.Status == 0 {
+		service.Log.Warnf("AppLogin: Application is disabled, appUUID=%s", req.AppUUID)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Application is disabled"})
 	}
 
 	// 生成应用JWT令牌
 	token, err := h.JWTConfig.GenerateAppToken(app.ID, app.UUID, app.Code)
 	if err != nil {
+		service.Log.Errorf("AppLogin: Failed to generate token: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
 
@@ -223,35 +228,42 @@ func (h *AuthHandler) ProxyLogin(c echo.Context) error {
 	// 1. 验证应用身份 (AppCode + Secret)
 	app, err := h.ApplicationService.GetApplicationByCode(req.AppCode)
 	if err != nil {
+		service.Log.Errorf("ProxyLogin: Invalid application code: %v, appCode=%s", err, req.AppCode)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application code"})
 	}
 
 	if app.SecretKey != req.AppSecret {
+		service.Log.Warnf("ProxyLogin: Invalid application secret, appCode=%s", req.AppCode)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application secret"})
 	}
 
 	if app.Status == 0 {
+		service.Log.Warnf("ProxyLogin: Application is disabled, appCode=%s", req.AppCode)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Application is disabled"})
 	}
 
 	// 2. 验证用户身份
 	user, err := h.UserService.GetUserByUsername(req.Username, app.ID)
 	if err != nil {
+		service.Log.Errorf("ProxyLogin: Invalid username or password, username=%s, appID=%d", req.Username, app.ID)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid username or password"})
 	}
 
 	if user.Status == 0 {
+		service.Log.Warnf("ProxyLogin: User is disabled, username=%s", req.Username)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "User is disabled"})
 	}
 
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		service.Log.Errorf("ProxyLogin: password mismatch, username=%s", req.Username)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid username or password"})
 	}
 
 	// 3. 生成 Token
 	token, err := h.JWTConfig.GenerateToken(user.ID, user.Username, app.ID, app.UUID)
 	if err != nil {
+		service.Log.Errorf("ProxyLogin: Failed to generate token: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
 
@@ -284,33 +296,39 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	// 获取应用信息
 	app, err := h.UserService.GetApplicationByCode(req.AppCode)
 	if err != nil {
+		service.Log.Errorf("Login: Invalid application code: %v, appCode=%s", err, req.AppCode)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid application code"})
 	}
 
 	// 检查应用状态
 	if app.Status == 0 {
+		service.Log.Warnf("Login: Application is disabled, appCode=%s", req.AppCode)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Application is disabled"})
 	}
 
 	// 查找用户（按应用隔离）
 	user, err := h.UserService.GetUserByUsername(req.Username, app.ID)
 	if err != nil {
+		service.Log.Errorf("Login: Invalid username or password, username=%s, appID=%d", req.Username, app.ID)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid username or password"})
 	}
 
 	// 检查用户状态
 	if user.Status == 0 {
+		service.Log.Warnf("Login: User is disabled, username=%s", req.Username)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "User is disabled"})
 	}
 
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		service.Log.Errorf("Login: password mismatch, username=%s", req.Username)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid username or password"})
 	}
 
 	// 生成JWT令牌（包含应用ID和UUID）
 	token, err := h.JWTConfig.GenerateToken(user.ID, user.Username, app.ID, app.UUID)
 	if err != nil {
+		service.Log.Errorf("Login: Failed to generate token: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to generate token"})
 	}
 

@@ -408,19 +408,64 @@ const handleCreate = async () => {
 }
 
 // 复制到剪贴板
-const copyToClipboard = async (text) => {
+const copyToClipboard = (text) => {
+  if (!text) {
+    message.warning('复制内容为空')
+    return
+  }
+
+  // 1. 尝试使用 Clipboard API (仅在安全上下文有效: HTTPS 或 localhost)
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        message.success('已复制到剪贴板')
+      })
+      .catch((err) => {
+        console.error('Clipboard API error:', err)
+        // Clipboard API 失败时尝试降级方案
+        // 注意：如果是用户拒绝权限导致的异步错误，execCommand 可能因失去用户手势而失效
+        fallbackCopy(text)
+      })
+  } else {
+    // 2. HTTP 环境或不支持 Clipboard API，直接使用降级方案 (同步执行，确保 execCommand 有效)
+    fallbackCopy(text)
+  }
+}
+
+// 降级复制方案
+const fallbackCopy = (text) => {
   try {
-    await navigator.clipboard.writeText(text)
-    message.success('已复制到剪贴板')
-  } catch (error) {
-    // 降级方案
     const textArea = document.createElement('textarea')
     textArea.value = text
+    
+    // 样式调整，避免页面抖动，同时保证可见性（有些浏览器不复制完全隐藏的元素）
+    textArea.style.position = 'fixed'
+    textArea.style.top = '0'
+    textArea.style.left = '0'
+    textArea.style.width = '2em'
+    textArea.style.height = '2em'
+    textArea.style.padding = '0'
+    textArea.style.border = 'none'
+    textArea.style.outline = 'none'
+    textArea.style.boxShadow = 'none'
+    textArea.style.background = 'transparent'
+    
     document.body.appendChild(textArea)
+    
     textArea.select()
-    document.execCommand('copy')
+    textArea.setSelectionRange(0, 99999) // 兼容移动端
+    
+    const successful = document.execCommand('copy')
     document.body.removeChild(textArea)
-    message.success('已复制到剪贴板')
+    
+    if (successful) {
+      message.success('已复制到剪贴板')
+    } else {
+      message.error('复制失败，请手动复制')
+    }
+  } catch (err) {
+    console.error('Fallback copy error:', err)
+    message.error('复制失败，请手动复制')
   }
 }
 
