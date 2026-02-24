@@ -49,7 +49,8 @@ type CheckPermissionReq struct {
 	Act    string `json:"act" binding:"required"`
 }
 
-// CheckPermission 检查权限
+// CheckPermission 检查用户是否具有指定资源的操作权限。
+// 若用户持有超级管理员角色则直接放行，否则交由 Casbin 策略判断。
 func (s *CasbinService) CheckPermission(userId uint, obj, act string) (bool, error) {
 	var user model.User
 	if err := s.DB.Preload("Roles").First(&user, userId).Error; err != nil {
@@ -57,6 +58,11 @@ func (s *CasbinService) CheckPermission(userId uint, obj, act string) (bool, err
 	}
 
 	for _, role := range user.Roles {
+		// 超级管理员角色直接放行，无需经过 Casbin 策略
+		if role.IsSuperAdmin {
+			return true, nil
+		}
+
 		roleKey := fmt.Sprintf("role:%s", role.UUID)
 		allowed, err := s.Enforcer.Enforce(roleKey, obj, act)
 		if err != nil {

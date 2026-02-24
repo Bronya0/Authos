@@ -11,16 +11,19 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// ConfigDictionaryHandler 配置字典处理器
 type ConfigDictionaryHandler struct {
 	ConfigDictionaryService *service.ConfigDictionaryService
 }
 
+// NewConfigDictionaryHandler 创建配置字典处理器实例
 func NewConfigDictionaryHandler(configDictionaryService *service.ConfigDictionaryService) *ConfigDictionaryHandler {
 	return &ConfigDictionaryHandler{
 		ConfigDictionaryService: configDictionaryService,
 	}
 }
 
+// ListConfigDictionaries 列出当前应用的配置字典，支持按键名模糊过滤
 func (h *ConfigDictionaryHandler) ListConfigDictionaries(c echo.Context) error {
 	appID, err := getAppIDFromToken(c)
 	if err != nil {
@@ -41,6 +44,7 @@ func (h *ConfigDictionaryHandler) ListConfigDictionaries(c echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
+// GetConfigDictionary 获取单条配置字典详情
 func (h *ConfigDictionaryHandler) GetConfigDictionary(c echo.Context) error {
 	appID, err := getAppIDFromToken(c)
 	if err != nil {
@@ -60,6 +64,7 @@ func (h *ConfigDictionaryHandler) GetConfigDictionary(c echo.Context) error {
 	return c.JSON(http.StatusOK, item)
 }
 
+// CreateConfigDictionary 创建配置字典条目
 func (h *ConfigDictionaryHandler) CreateConfigDictionary(c echo.Context) error {
 	appID, err := getAppIDFromToken(c)
 	if err != nil {
@@ -114,6 +119,7 @@ func (h *ConfigDictionaryHandler) CreateConfigDictionary(c echo.Context) error {
 	return c.JSON(http.StatusCreated, item)
 }
 
+// UpdateConfigDictionary 更新配置字典条目
 func (h *ConfigDictionaryHandler) UpdateConfigDictionary(c echo.Context) error {
 	appID, err := getAppIDFromToken(c)
 	if err != nil {
@@ -173,6 +179,7 @@ func (h *ConfigDictionaryHandler) UpdateConfigDictionary(c echo.Context) error {
 	return c.JSON(http.StatusOK, item)
 }
 
+// DeleteConfigDictionary 删除配置字典条目
 func (h *ConfigDictionaryHandler) DeleteConfigDictionary(c echo.Context) error {
 	appID, err := getAppIDFromToken(c)
 	if err != nil {

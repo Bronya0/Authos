@@ -128,6 +128,7 @@ func (h *AuthzHandler) CheckPermissionWithSecret(c echo.Context) error {
 	})
 }
 
+// CheckPermissionByKey 根据权限标识（key）检查用户是否具有该权限
 func (h *AuthzHandler) CheckPermissionByKey(c echo.Context) error {
 	var req CheckPermissionByKeyReq
 	if err := c.Bind(&req); err != nil {
