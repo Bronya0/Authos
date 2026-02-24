@@ -70,7 +70,7 @@ func (s *UserService) CreateUser(user *model.User) error {
 }
 
 // UpdateUser 更新用户
-func (s *UserService) UpdateUser(user *model.User) error {
+func (s *UserService) UpdateUser(user *model.User, appID uint) error {
 	// 开始事务
 	return s.DB.Transaction(func(tx *gorm.DB) error {
 		// 更新用户基本信息（不包含密码）
@@ -82,15 +82,16 @@ func (s *UserService) UpdateUser(user *model.User) error {
 			return err
 		}
 
-		// 关联角色
+		// 始终替换角色关联（若 RoleIDs 为空则清空所有角色）
+		// 同时校验角色必须属于同一应用，防止跨应用赋权
+		var roles []*model.Role
 		if len(user.RoleIDs) > 0 {
-			var roles []*model.Role
-			if err := tx.Where("id IN ?", user.RoleIDs).Find(&roles).Error; err != nil {
+			if err := tx.Where("id IN ? AND app_id = ?", user.RoleIDs, appID).Find(&roles).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(user).Association("Roles").Replace(roles); err != nil {
-				return err
-			}
+		}
+		if err := tx.Model(user).Association("Roles").Replace(roles); err != nil {
+			return err
 		}
 
 		return nil

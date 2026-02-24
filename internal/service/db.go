@@ -104,8 +104,9 @@ func seedData(db *gorm.DB, config *Config) error {
 
 	// 创建超级管理员角色
 	adminRole := &model.Role{
-		Name:  "超级管理员",
-		AppID: defaultApp.ID,
+		Name:         "超级管理员",
+		AppID:        defaultApp.ID,
+		IsSuperAdmin: true,
 	}
 	if err := db.Create(adminRole).Error; err != nil {
 		return err

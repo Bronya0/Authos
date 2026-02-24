@@ -115,10 +115,26 @@ func (h *RoleHandler) UpdateRole(c echo.Context) error {
 	}
 
 	// 记录审计日志
+	userIDInterface := c.Get("userID")
+	usernameInterface := c.Get("username")
+	var userID uint
+	var username string
+	if userIDInterface != nil {
+		if u, ok := userIDInterface.(uint); ok {
+			userID = u
+		} else if f, ok := userIDInterface.(float64); ok {
+			userID = uint(f)
+		}
+	}
+	if usernameInterface != nil {
+		if s, ok := usernameInterface.(string); ok {
+			username = s
+		}
+	}
 	h.RoleService.DB.Create(&model.AuditLog{
 		AppID:      appID,
-		UserID:     c.Get("userID").(uint),
-		Username:   c.Get("username").(string),
+		UserID:     userID,
+		Username:   username,
 		Action:     "UPDATE",
 		Resource:   "ROLE",
 		ResourceID: fmt.Sprintf("%d", id),
@@ -242,30 +258,51 @@ func (h *RoleHandler) ListRoles(c echo.Context) error {
 			role.MenuPreview = append(role.MenuPreview, role.Menus[i].Name)
 		}
 
-		// API 权限信息 (通过 Casbin)
-		roleKey := fmt.Sprintf("role:%s", role.UUID)
-		if h.RoleService.CasbinService != nil && h.RoleService.CasbinService.Enforcer != nil {
-			policies, _ := h.RoleService.CasbinService.Enforcer.GetFilteredPolicy(0, roleKey)
-			role.ApiPermCount = len(policies)
+		// API 权限信息
+		if role.IsSuperAdmin {
+			// 超级管理员拥有所有权限
+			var allPermissions []model.ApiPermission
+			if err := h.RoleService.DB.Where("app_id = ?", appID).Find(&allPermissions).Error; err == nil {
+				role.ApiPermCount = len(allPermissions)
 
-			apiPreviewCount := 3
-			if role.ApiPermCount < apiPreviewCount {
-				apiPreviewCount = role.ApiPermCount
-			}
-			role.ApiPermPreview = make([]string, 0, apiPreviewCount)
-			for i := 0; i < apiPreviewCount; i++ {
-				// 检查 policies[i] 的长度，防止索引越界
-				if len(policies[i]) > 2 {
-					role.ApiPermPreview = append(role.ApiPermPreview, fmt.Sprintf("%s %s", policies[i][2], policies[i][1]))
-				} else if len(policies[i]) > 1 {
-					role.ApiPermPreview = append(role.ApiPermPreview, policies[i][1])
+				apiPreviewCount := 3
+				if role.ApiPermCount < apiPreviewCount {
+					apiPreviewCount = role.ApiPermCount
 				}
+				role.ApiPermPreview = make([]string, 0, apiPreviewCount)
+				for i := 0; i < apiPreviewCount; i++ {
+					role.ApiPermPreview = append(role.ApiPermPreview, allPermissions[i].Name)
+				}
+			} else {
+				role.ApiPermCount = 0
+				role.ApiPermPreview = []string{}
 			}
 		} else {
-			// Casbin 服务未初始化，记录日志并跳过权限信息
-			log.Printf("Warning: CasbinService or Enforcer is nil when listing roles")
-			role.ApiPermCount = 0
-			role.ApiPermPreview = []string{}
+			// 普通角色通过 Casbin 获取权限
+			roleKey := fmt.Sprintf("role:%s", role.UUID)
+			if h.RoleService.CasbinService != nil && h.RoleService.CasbinService.Enforcer != nil {
+				policies, _ := h.RoleService.CasbinService.Enforcer.GetFilteredPolicy(0, roleKey)
+				role.ApiPermCount = len(policies)
+
+				apiPreviewCount := 3
+				if role.ApiPermCount < apiPreviewCount {
+					apiPreviewCount = role.ApiPermCount
+				}
+				role.ApiPermPreview = make([]string, 0, apiPreviewCount)
+				for i := 0; i < apiPreviewCount; i++ {
+					// 检查 policies[i] 的长度，防止索引越界
+					if len(policies[i]) > 2 {
+						role.ApiPermPreview = append(role.ApiPermPreview, fmt.Sprintf("%s %s", policies[i][2], policies[i][1]))
+					} else if len(policies[i]) > 1 {
+						role.ApiPermPreview = append(role.ApiPermPreview, policies[i][1])
+					}
+				}
+			} else {
+				// Casbin 服务未初始化，记录日志并跳过权限信息
+				log.Printf("Warning: CasbinService or Enforcer is nil when listing roles")
+				role.ApiPermCount = 0
+				role.ApiPermPreview = []string{}
+			}
 		}
 	}
 

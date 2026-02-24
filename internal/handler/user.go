@@ -146,8 +146,14 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	// 设置ID（ID字段来自嵌入式gorm.Model）
 	user.ID = uint(id)
 
+	// 从 JWT token 中获取 appID
+	appID, err := getAppIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "获取应用ID失败"})
+	}
+
 	// 更新用户信息
-	if err := h.UserService.UpdateUser(user); err != nil {
+	if err := h.UserService.UpdateUser(user, appID); err != nil {
 		service.Log.Errorf("Failed to update user: %v, userID=%d, username=%s", err, user.ID, user.Username)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to update user"})
 	}
@@ -173,7 +179,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	}
 
 	h.UserService.DB.Create(&model.AuditLog{
-		AppID:      user.AppID, // 这里如果是系统管理员修改可能需要从context拿appID
+		AppID:      appID,
 		UserID:     userID,
 		Username:   username,
 		Action:     "UPDATE",

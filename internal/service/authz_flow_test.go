@@ -1,6 +1,9 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -9,6 +12,26 @@ import (
 
 	"Authos/internal/model"
 )
+
+// projectRoot 返回项目根目录（包含 model.conf 的目录）
+func projectRoot() string {
+	_, filename, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(filename)
+	// internal/service -> ../.. -> project root
+	root := filepath.Join(dir, "..", "..")
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return root
+	}
+	return abs
+}
+
+func init() {
+	// 切换工作目录到项目根目录，使 model.conf 可被找到
+	if err := os.Chdir(projectRoot()); err != nil {
+		panic("failed to chdir to project root: " + err.Error())
+	}
+}
 
 func newTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{

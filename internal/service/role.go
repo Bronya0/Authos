@@ -60,8 +60,10 @@ func (s *RoleService) CreateRole(role *model.Role) error {
 }
 
 // UpdateRole 更新角色（按应用隔离）
+// 使用 Save + Select 确保 bool 零值（IsSuperAdmin=false）可被正确写入
 func (s *RoleService) UpdateRole(role *model.Role) error {
-	return s.DB.Where("id = ? AND app_id = ?", role.ID, role.AppID).Updates(role).Error
+	return s.DB.Model(role).Where("id = ? AND app_id = ?", role.ID, role.AppID).
+		Select("Name", "IsSuperAdmin").Updates(role).Error
 }
 
 // DeleteRole 删除角色（按应用隔离）

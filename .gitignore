@@ -17,6 +17,9 @@ node_modules/
 coverage.*
 *.coverprofile
 profile.cov
+*.log
+
+Authos
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

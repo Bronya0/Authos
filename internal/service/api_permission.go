@@ -329,6 +329,22 @@ func (s *ApiPermissionService) RemoveApiPermissionFromRole(appID uint, roleUUID,
 
 // GetApiPermissionsForRole 获取角色的接口权限（按应用隔离）
 func (s *ApiPermissionService) GetApiPermissionsForRole(appID uint, roleUUID string) ([]model.ApiPermission, error) {
+	// 先查询角色信息，检查是否是超级管理员
+	var role model.Role
+	if err := s.DB.Where("uuid = ? AND app_id = ?", roleUUID, appID).First(&role).Error; err != nil {
+		// 如果角色不存在，返回空列表
+		return []model.ApiPermission{}, nil
+	}
+
+	// 如果是超级管理员，返回该应用下的所有权限
+	if role.IsSuperAdmin {
+		var permissions []model.ApiPermission
+		if err := s.DB.Where("app_id = ?", appID).Find(&permissions).Error; err != nil {
+			return nil, err
+		}
+		return permissions, nil
+	}
+
 	// 获取角色的所有权限策略
 	rolePrefix := fmt.Sprintf("role:%s", roleUUID)
 	policies, _ := s.CasbinService.Enforcer.GetFilteredPolicy(0, rolePrefix)
@@ -341,10 +357,10 @@ func (s *ApiPermissionService) GetApiPermissionsForRole(appID uint, roleUUID str
 		}
 	}
 
-	// 查询权限信息
+	// 查询权限信息（限定在当前应用内，防止跨应用泄露）
 	var permissions []model.ApiPermission
 	if len(permissionKeys) > 0 {
-		if err := s.DB.Where("key IN ?", permissionKeys).Find(&permissions).Error; err != nil {
+		if err := s.DB.Where("key IN ? AND app_id = ?", permissionKeys, appID).Find(&permissions).Error; err != nil {
 			return nil, err
 		}
 	}
